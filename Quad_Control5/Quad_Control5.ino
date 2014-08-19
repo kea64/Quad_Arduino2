@@ -26,7 +26,7 @@ Realized a single processor is inadequate to stabilize flight
 
 Q5:
 Prepared the Arduino as the Main Controller/Interceptor. A dedicated RC receiver will send signals to the Arduino, which may alter signals, and then sends commands to a dedicated flight controller
-
+Added Channel 5 to Control Auto-Pilot
 */
 
 #include <Servo.h>
@@ -100,8 +100,8 @@ SFE_BMP180 pressure;
 #define ESC_SCALING 1
 #define ESC_MIN 90
 #define ESC_MAX 180
-#define ROLL_OFFSET -2 //Positive Lowers Aft 4
-#define PITCH_OFFSET 4 //Positive Lowers Aft 2
+#define ROLL_OFFSET 0 //Positive Lowers Aft 4
+#define PITCH_OFFSET 0 //Positive Lowers Aft 2
 #define YAW_OFFSET 0
 #define altAlpha 0.6
 #define globalAlpha 0.85
@@ -135,16 +135,16 @@ SFE_BMP180 pressure;
 #define kiy 0
 #define kdy 0
 
-#define pin3 12
-#define pin4 11
-#define pin1 10
-#define pin2 9
-#define channel1 8
-#define channel2 7
-#define channel3 6
+#define aileronPin A3
+#define elevatorPin A2
+#define throttlePin A1
+#define rudderPin A0
+#define channel1 2
+#define channel2 3
+#define channel3 4
 #define channel4 5
-#define channel5 4
-#define channel6 3
+#define channel5 6
+#define channel6 7
 #define RC_ENABLE 1
 
 Servo Throttle;
@@ -155,14 +155,11 @@ Servo Aileron;
 void setup() {
   Wire.begin(); 
   Serial.begin(115200);
-  delay(100);
   initGyro(); //Setup Gyro
   initAcc();  //Setup Accelerometer
   initMag();  //Setup Magnetometer
-  delay(25);
   GyroCalibrate(); //Factory Setup Routine
   GyroCalibrate2(); //Calibrates Gyro and/or other sensors
-  delay(25);
   initAngles(); //Sets the Gyro Angles to initially match the accelerometers
   
   pressure.begin();
@@ -227,20 +224,18 @@ void loop() {
     Serial.println(cycle,3);
     Serial.print("Global: ");
     Serial.println(globalSpeed);
-    Serial.print("M1: ");
-    Serial.println(motor1);
-    Serial.print("M2: ");
-    Serial.println(motor2);
-    Serial.print("M3: ");
-    Serial.println(motor3);
-    Serial.print("M4: ");
-    Serial.println(motor4);
-    Serial.print("RControl: ");
-    Serial.println(rollControl);
-    Serial.print("Strafe: ");
-    Serial.println(strafe);
-    Serial.print("MPID: ");
-    Serial.println(Max_PID);
+    Serial.print("C 1: ");
+    Serial.println(channel1Cycle);
+    Serial.print("C 2: ");
+    Serial.println(channel2Cycle);
+    Serial.print("C 3: ");
+    Serial.println(channel3Cycle);
+    Serial.print("C 4: ");
+    Serial.println(channel4Cycle);
+    Serial.print("C 5: ");
+    Serial.println(channel5Cycle);
+    Serial.print("RC Mode: ");
+    Serial.println(RC_CONTROL_MODE);
     
     
     //Serial.print("Gyro: ");
@@ -376,10 +371,10 @@ void initAngles(){
 
 void ARM_Sequence(){
   
-  Aileron.attach(pin1);
-  Elevator.attach(pin2);
-  Throttle.attach(pin3);
-  Rudder.attach(pin4);
+  Aileron.attach(aileronPin);
+  Elevator.attach(elevatorPin);
+  Throttle.attach(throttlePin);
+  Rudder.attach(rudderPin);
   delay(20);
   
   /*
@@ -629,7 +624,7 @@ void channel4Update(){
       channel4Start = micros();
     } else {
       channel4Cycle = micros() - channel4Start;
-        Rudder.writeMicroseconds(channel4Cycle);
+      Rudder.writeMicroseconds(channel4Cycle);
     }
   }
 }
@@ -641,9 +636,9 @@ void channel5Update(){
     } else {
       channel5Cycle = micros() - channel5Start;
       if (channel5Cycle < 1300){
-        RC_CONTROL_MODE = 0;
-      } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700) {
         RC_CONTROL_MODE = 1;
+      } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700) {
+        RC_CONTROL_MODE = 0;
       } else if (channel5Cycle > 1700) {
         RC_CONTROL_MODE = 2;
       }
