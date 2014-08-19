@@ -1,0 +1,73 @@
+***** PITCH *****
+
+Ku = 0.15
+Tu = 2.22 s
+
+Experimental
+Decent Response, Noisy
+kpp 0.081
+kip 0.04
+kdp 0.15
+
+NO OVERSHOOT ZN
+Slower response, very smooth
+kpp 0.01614
+kip 0.0518
+kdp 0.0503
+kdp Experimental 0.0603
+
+NO OVERSHOOT ZN x2
+Moderate Response, Rather Smooth
+kpp 0.03228
+kip 0.1036
+kdp 0.1106
+
+Experimental 2
+Decent Pitch Control, Rather Smooth, Response Time needs work (maybe integral)
+kpp 0.0803
+kip 0.0916
+kdp 0.070
+
+Experimental 3
+Fast Pitch Control, Rather Smooth, Moderate Resistance
+kpp 0.0803
+kip 0.4016
+kdp 0.070
+
+No Overshoot ZN x3 with all Motors
+Slow Response, Weak Resistance, Smooth
+kpp 0.03
+kip 0.027
+kdp 0.0225
+
+Experimental 4
+Fast Pitch Control, Rather Smooth, Moderate Resistance
+kpp 0.05
+kip 0.2
+kdp 0.025
+
+Experimental 5
+
+kpp 0.05
+kip 0.1
+kdp 0.03
+
+Experimental 6
+Decent Pitch Control, Rather Smooth, Weak Resistance
+kpp 0.05
+kip 0.1
+kdp 0.025
+
+***** ROLL *****
+
+Ku = 0.055
+Tu = 3.03
+
+No OverShoot ZN
+Slow Roll Control, Rather Smmoth, Weak Resistance
+kpr 0.011
+kir 0.007
+kdr 0.011
+
+
+JYAVP21E97A004197
