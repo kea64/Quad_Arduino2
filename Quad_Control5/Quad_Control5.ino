@@ -383,16 +383,16 @@ void ARM_Sequence(){
   delay(20);
   
   /*
-  ESC1.write(180);
-  ESC2.write(180);
-  ESC3.write(180);
-  ESC4.write(180);
+  Aileron.write(180);
+  Elevator.write(180);
+  Throttle.write(180);
+  Rudder.write(180);
   delay(2000);
   
-  ESC1.write(90);
-  ESC2.write(90);
-  ESC3.write(90);
-  ESC4.write(90);
+  Aileron.write(90);
+  Elevator.write(90);
+  Throttle.write(90);
+  Rudder.write(90);
   delay(3000);
   //delay(1000);
   */
@@ -528,13 +528,13 @@ void calcAlt(){
 void motorUpdate(){
   
   //Update Motors
-  ESC1.writeMicroseconds(motor1);
-  ESC2.writeMicroseconds(motor2);
-  ESC3.writeMicroseconds(motor3);
-  ESC4.writeMicroseconds(motor4);
+  //Aileron.writeMicroseconds(motor1);
+  //Elevator.writeMicroseconds(motor2);
+  //Throttle.writeMicroseconds(motor3);
+  //Rudder.writeMicroseconds(motor4);
   
-  //ESC3.write(globalSpeed + 90);
-  //ESC4.write(globalSpeed + 90);
+  //Throttle.write(globalSpeed + 90);
+  //Rudder.write(globalSpeed + 90);
   
 }
 
@@ -591,51 +591,47 @@ void altCheck(){
 }
 
 void channel1Update(){
-  
+  if (RC_CONTROL_MODE == 0){
     if (digitalRead(channel1) == 1){
       channel1Start = micros();
     } else {
       channel1Cycle = micros() - channel1Start;
-      if (RC_CONTROL_MODE == 0){
-        ESC1.writeMicroseconds(channel1Cycle);
-      }
+      Aileron.writeMicroseconds(channel1Cycle);
     }
+  }
 }
 
 void channel2Update(){
-  
+  if (RC_CONTROL_MODE == 0){
     if (digitalRead(channel2) == 1){
       channel2Start = micros();
     } else {
       channel2Cycle = micros() - channel2Start;
-      if (RC_CONTROL_MODE == 0){
-        ESC2.writeMicroseconds(channel2Cycle);
-      }
+      Elevator.writeMicroseconds(channel2Cycle);
     }
+  }
 }
 
 void channel3Update(){
-  
+  if (RC_CONTROL_MODE == 0){
     if (digitalRead(channel3) == 1){
       channel3Start = micros();
     } else {
       channel3Cycle = micros() - channel3Start;
-      if (RC_CONTROL_MODE == 0){
-        ESC3.writeMicroseconds(channel3Cycle);
-      }
+      Throttle.writeMicroseconds(channel3Cycle);
     }
+  }
 }
 
 void channel4Update(){
-  
+  if (RC_CONTROL_MODE == 0){
     if (digitalRead(channel4) == 1){
       channel4Start = micros();
     } else {
       channel4Cycle = micros() - channel4Start;
-      if (RC_CONTROL_MODE == 0){
-        ESC4.writeMicroseconds(channel4Cycle);
-      }
+        Rudder.writeMicroseconds(channel4Cycle);
     }
+  }
 }
 
 void channel5Update(){
