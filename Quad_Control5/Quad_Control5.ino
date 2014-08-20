@@ -60,11 +60,12 @@ int i,mX,mY,mZ;
 int motor1,motor2,motor3,motor4;
 int forward = 0;
 int strafe = 0;
-int targetHeading = 180;
+int targetHeading = 0;
 int IRRaw,IR;
 int hoverSpeed = 30;
 int RC_CONTROL_MODE = 0;
 int rudderOut = 0;
+int throttleOut = 0;
 
 volatile int channel1Cycle;
 volatile int channel2Cycle;
@@ -77,11 +78,12 @@ double baseline;
 double T,P,p0,a;
 double alt = 0.0;
 double targetAlt = 1.0;
-double ITermP,ITermR,ITermY,lastPitch,lastRoll,lastYaw;
-double pitchControl,rollControl,yawControl,errorYaw;
+double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
+double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottle;
 
 boolean landed_True = 0;
 boolean landing_Enable = 0;
+boolean MODE_CHANGE = 0;
 
 char status;
 
@@ -112,16 +114,19 @@ SFE_BMP180 pressure;
 #define rollAlpha 0.5
 
 #define speedAggression 1.5
-#define BARO_MODE 1
+#define BARO_MODE 3
 #define MAX_ALTITUDE 4.0
 #define IRPin 0
 #define IRAlpha 0.8
 #define MAX_YAW 20.0
-#define MAX_SPEED 60.0
+#define MAX_THROTTLE 1900
+#define MIN_THROTTLE 1350
 
-#define kpy 0.25
+#define kpy 0.2
 #define kiy 0
-#define kdy 0
+
+#define kpt 100
+#define kit 0
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -219,12 +224,12 @@ void loop() {
     Serial.println(channel5Cycle);
     Serial.print("RC Mode: ");
     Serial.println(RC_CONTROL_MODE);
-    Serial.print("YawC: ");
-    Serial.println(yawControl);
-    Serial.print("Rudder: ");
-    Serial.println(rudderOut);
-    Serial.print("Error: ");
-    Serial.println(errorYaw);
+    Serial.print("Thr Out ");
+    Serial.println(throttleOut);
+    Serial.print("TargetAlt: ");
+    Serial.println(targetAlt);
+    Serial.print("Alt: ");
+    Serial.println(alt);
     
     
     //Serial.print("Gyro: ");
@@ -526,7 +531,7 @@ void motorUpdate(){
     //Update Motors
     //Aileron.writeMicroseconds(motor1);
     //Elevator.writeMicroseconds(motor2);
-    //Throttle.writeMicroseconds(motor3);
+    Throttle.writeMicroseconds(throttleOut);
     Rudder.writeMicroseconds(rudderOut);
   
     //Throttle.write(globalSpeed + 90);
@@ -536,14 +541,17 @@ void motorUpdate(){
 }
 
 void elev(){
-  if (RC_ENABLE == 0 || RC_CONTROL_MODE == 2){
+  if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
-        globalSpeed = (targetAlt - alt) * speedAggression + globalSpeed;
-        if (alt >= MAX_ALTITUDE){globalSpeed *= 0.95;}
-        if (globalSpeed > MAX_SPEED){globalSpeed = MAX_SPEED;}
-        if (globalSpeed <= 0.0){globalSpeed = 0.0;}
-        if (abs(targetAlt-alt) < .2) {hoverSpeed = globalSpeed;}
+        errorThrottle = targetAlt - alt;
+        ITermT += (kit * int(millis() - elevClockOld) * errorThrottle);
+        if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
+        else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
+        throttleControl = kpt * errorThrottle + ITermT;
+        if (throttleControl > MAX_THROTTLE) {throttleControl = MAX_THROTTLE;}
+        if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
+        throttleOut = throttleControl;
       }
       elevClockOld = millis();
     }
@@ -633,10 +641,10 @@ void channel3Update(){
     }
   } else if (RC_CONTROL_MODE == 1){
     if (digitalRead(channel3) == 1){
-      channel3Start = micros();
+      //channel3Start = micros();
     } else {
-      channel3Cycle = micros() - channel3Start;
-      Throttle.writeMicroseconds(channel3Cycle);
+      //channel3Cycle = micros() - channel3Start;
+      //Throttle.writeMicroseconds(channel3Cycle);
     }
   }
 }
@@ -659,6 +667,10 @@ void channel5Update(){
     } else {
       channel5Cycle = micros() - channel5Start;
       if (channel5Cycle < 1300){
+        if (RC_CONTROL_MODE != 1){
+          targetAlt = alt;
+          ITermT = channel3Cycle;
+        }
         RC_CONTROL_MODE = 1;
       } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700) {
         RC_CONTROL_MODE = 0; //For Safety Purposes
