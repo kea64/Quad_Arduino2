@@ -1,7 +1,7 @@
 #include <SoftwareSerial.h> 
 #include <TinyGPS++.h>
-#define RXPin 3    
-#define TXPin 2
+#define RXPin 9    
+#define TXPin 8
 #define GPSBaud 38400
 #define ConsoleBaud 115200
 
@@ -32,8 +32,10 @@ void loop()
 {
   // If any characters have arrived from the GPS,
   // send them to the TinyGPS++ object
-  while (ss.available() > 0)
-    gps.encode(ss.read());
+  while (ss.available() > 0){
+    char c = byte(ss.read());
+    gps.encode(c);
+  }
     
   // Let's display the new location and altitude
   // whenever either of them have been updated.
