@@ -125,8 +125,8 @@ SFE_BMP180 pressure;
 #define kpy 0.2
 #define kiy 0
 
-#define kpt 100
-#define kit 0
+#define kpt 15
+#define kit 5
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -545,7 +545,7 @@ void elev(){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
         errorThrottle = targetAlt - alt;
-        ITermT += (kit * int(millis() - elevClockOld) * errorThrottle);
+        ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
         throttleControl = kpt * errorThrottle + ITermT;
