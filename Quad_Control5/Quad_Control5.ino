@@ -123,21 +123,21 @@ SFE_BMP180 pressure;
 #define MIN_THROTTLE 1350
 
 #define kpy 0.2
-#define kiy 0
+#define kiy 0.2
 
-#define kpt 15
-#define kit 5
+#define kpt 7
+#define kit 0.5
 
 #define aileronPin A3
 #define elevatorPin A2
 #define throttlePin A1
 #define rudderPin A0
-#define channel1 2
-#define channel2 3
-#define channel3 4
-#define channel4 5
-#define channel5 6
-#define channel6 7
+#define channel1 4
+#define channel2 5
+#define channel3 6
+#define channel4 7
+#define channel5 8
+#define channel6 9
 #define RC_ENABLE 1
 
 Servo Throttle;
@@ -520,7 +520,7 @@ void motorUpdate(){
     errorYaw = yaw - targetHeading;
     if (errorYaw <= -180){errorYaw += 360;}
     if (errorYaw > 180){errorYaw -= 360;}
-    ITermY += (kiy * cycle * errorYaw);
+    ITermY += (kiy * 0.001 * cycle * errorYaw);
     if (ITermY > MAX_YAW) {ITermY = MAX_YAW;}
     else if (ITermY < -MAX_YAW) {ITermY = -MAX_YAW;}
     yawControl = kpy * errorYaw + ITermY;
