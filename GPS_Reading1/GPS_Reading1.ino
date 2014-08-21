@@ -7,6 +7,7 @@
 
 // The serial connection to the GPS device
 
+boolean GPS_AVAILABLE = 0;
 SoftwareSerial ss(RXPin, TXPin);
 
 // The TinyGPS++ object
@@ -14,14 +15,31 @@ TinyGPSPlus gps;
 
 void setup()
 {
-  
+  delay(2000);
   Serial.begin(ConsoleBaud);
-  ss.begin(GPSBaud);
-  ss.print("$PUBX,41,1,0007,0003,4800,0*13\r\n"); // Change iTead baudrate
+  //ss.begin(GPSBaud);
+  //ss.print("$PUBX,41,1,0007,0003,4800,0*13\r\n"); // Change iTead baudrate
+  //ss.flush();
+  //delay(50);
   ss.begin(4800); // reset SoftwareSerial baudrate
   ss.flush();
+  //delay(100);
+  if (ss.available() > 0){GPS_AVAILABLE  = 1;}
   
-
+  while (!GPS_AVAILABLE){
+    ss.begin(GPSBaud);
+    ss.print("$PUBX,41,1,0007,0003,4800,0*13\r\n"); // Change iTead baudrate
+    ss.flush();
+    delay(50);
+    if (ss.available() > 0){
+        GPS_AVAILABLE = 1;
+        Serial.println(GPS_AVAILABLE);
+        ss.begin(4800);
+        ss.flush();
+        delay(50);
+    }
+  }
+  
   Serial.println("GPS Example 2");
   Serial.println("A simple tracker using TinyGPS++.");
   Serial.println("by Mikal Hart");
@@ -35,6 +53,7 @@ void loop()
   while (ss.available() > 0){
     char c = byte(ss.read());
     gps.encode(c);
+    
   }
     
   // Let's display the new location and altitude
