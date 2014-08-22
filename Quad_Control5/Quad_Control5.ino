@@ -34,6 +34,7 @@ Added Channel 5 to Control Auto-Pilot
 #include <ADXL345.h>
 #include <SFE_BMP180.h>
 #include <PinChangeInt.h>
+#include <TinyGPS++.h>
 
 float GyroX,GyroY,GyroZ,GyroTemp,GyroTempCelsius,biasGyroX, biasGyroY, biasGyroZ, biasAccelX, biasAccelY, biasAccelZ,xAng,yAng,cycle,pitchGyro,rollGyro,pitch,roll,pitchFinal,rollFinal,yaw,accX,accY,accZ,CMy,CMx,altCorrect;
 float globalSpeed = 0.0;
@@ -50,6 +51,7 @@ float kx,kv;
 
 const float pi = 3.14159;
 int aX,aY,aZ;
+int distanceToWaypoint;
 int g_offx = 0;
 int g_offy = 0;
 int g_offz = 0;
@@ -66,6 +68,7 @@ int hoverSpeed = 30;
 int RC_CONTROL_MODE = 0;
 int rudderOut = 0;
 int throttleOut = 0;
+int waypointCounter = 0;
 
 volatile int channel1Cycle;
 volatile int channel2Cycle;
@@ -80,6 +83,14 @@ double alt = 0.0;
 double targetAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
 double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottle;
+double latitude,longitude;
+
+static const int numWaypoint = 3;
+static const double waypoint[] = {40.652875, -76.959746, 3.0,    //Waypoints
+                                  40.652916, -76.959333, 3.0,
+                                  40.653157, -76.959247, 3.0,
+                                  40.653207, -76.959039, 3.0
+                                                            };
 
 boolean landed_True = 0;
 boolean landing_Enable = 0;
@@ -90,7 +101,9 @@ char status;
 unsigned long kalmanClockNew,kalmanClockOld,baroClockOld,tempClockOld,commClockOld,elevClockOld,landClockOld,channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
 ADXL345 adxl;
+TinyGPSPlus gps;
 SFE_BMP180 pressure;
+
 #define ITG3200_Address 0x68
 #define address 0x1E
 #define KALMAN_DELAY 5
@@ -147,7 +160,7 @@ Servo Aileron;
 
 void setup() {
   Wire.begin(); 
-  Serial.begin(115200);
+  Serial.begin(38400);
   initGyro(); //Setup Gyro
   initAcc();  //Setup Accelerometer
   initMag();  //Setup Magnetometer
@@ -175,6 +188,9 @@ void setup() {
     pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Update,CHANGE);
     pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Update,CHANGE);
   }
+  
+  pinMode(13,OUTPUT); //GPS Lock Indicator
+  digitalWrite(13,LOW);
   
   kalmanClockOld = millis();
   baroClockOld = millis();
@@ -228,8 +244,10 @@ void loop() {
     Serial.println(throttleOut);
     Serial.print("TargetAlt: ");
     Serial.println(targetAlt);
-    Serial.print("Alt: ");
-    Serial.println(alt);
+    Serial.print("YawC: ");
+    Serial.println(yawControl);
+    Serial.print("Sat: ");
+    Serial.println(gps.satellites.value());
     
     
     //Serial.print("Gyro: ");
@@ -262,6 +280,8 @@ void loop() {
     
     commClockOld = millis();
   }
+  
+  getGPS(); //Update GPS Data
   
   elev();
   
@@ -457,6 +477,24 @@ void getTemp(){
   }
 }
 
+void getGPS(){
+  while (Serial.available() > 0){
+    if (gps.encode(Serial.read())){
+      latitude = gps.location.lat();
+      longitude = gps.location.lng();
+      targetHeading = int(TinyGPSPlus::courseTo(latitude,longitude,waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+     
+      distanceCheck();
+      
+      if (gps.satellites.value() >= 5){ //GPS Lock Indicator
+        digitalWrite(13,HIGH);
+      } else {
+        digitalWrite(13,LOW);
+      }
+    }
+  }
+}
+
 void kalman(){
   kalmanClockNew = millis(); //Cycle Timing Code
   cycle = (((kalmanClockNew - kalmanClockOld)*1.0)/1000.0);
@@ -593,6 +631,16 @@ void freeFallDetector(){
 
 void altCheck(){
   if (alt > MAX_ALTITUDE) {globalSpeed *= 0.95;}
+}
+
+void distanceCheck(){
+  distanceToWaypoint = int(TinyGPSPlus::distanceBetween(latitude,longitude,waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+  if(distanceToWaypoint < 1){
+    waypointCounter += 3;
+    if ((waypointCounter/3) > numWaypoint){
+     waypointCounter -= 3; 
+    }
+  }
 }
 
 void channel1Update(){
