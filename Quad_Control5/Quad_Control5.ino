@@ -220,14 +220,6 @@ void loop() {
   }
   
   if ((millis() - commClockOld) >= COMM_DELAY){
-    Serial.print("Alt: ");
-    Serial.println(alt);
-    Serial.print("Temp: ");
-    Serial.println(T);
-    Serial.print("Cycle: ");
-    Serial.println(cycle,3);
-    Serial.print("Global: ");
-    Serial.println(globalSpeed);
     Serial.print("C 1: ");
     Serial.println(channel1Cycle);
     Serial.print("C 2: ");
@@ -242,12 +234,18 @@ void loop() {
     Serial.println(RC_CONTROL_MODE);
     Serial.print("Thr Out ");
     Serial.println(throttleOut);
+    Serial.print("Alt: ");
+    Serial.println(alt);
     Serial.print("TargetAlt: ");
     Serial.println(targetAlt);
     Serial.print("YawC: ");
     Serial.println(yawControl);
     Serial.print("Sat: ");
     Serial.println(gps.satellites.value());
+    Serial.print("T Heading: ");
+    Serial.println(targetHeading);
+    Serial.print("Yaw: ");
+    Serial.println(yaw);
     
     
     //Serial.print("Gyro: ");
@@ -483,7 +481,7 @@ void getGPS(){
       latitude = gps.location.lat();
       longitude = gps.location.lng();
       targetHeading = int(TinyGPSPlus::courseTo(latitude,longitude,waypoint[waypointCounter],waypoint[waypointCounter + 1]));
-     
+      if (targetHeading > 180){targetHeading -= 360;}
       distanceCheck();
       
       if (gps.satellites.value() >= 5){ //GPS Lock Indicator
