@@ -35,6 +35,7 @@ Added Channel 5 to Control Auto-Pilot
 #include <SFE_BMP180.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
+#include <compass.h>
 
 float GyroX,GyroY,GyroZ,GyroTemp,GyroTempCelsius,biasGyroX, biasGyroY, biasGyroZ, biasAccelX, biasAccelY, biasAccelZ,xAng,yAng,cycle,pitchGyro,rollGyro,pitch,roll,pitchFinal,rollFinal,yaw,accX,accY,accZ,CMy,CMx,altCorrect;
 float globalSpeed = 0.0;
@@ -49,7 +50,6 @@ float Pvv = 0.1;
 float Pxv = 0.1;
 float kx,kv;
 
-const float pi = 3.14159;
 int aX,aY,aZ;
 int distanceToWaypoint;
 int g_offx = 0;
@@ -58,7 +58,7 @@ int g_offz = 0;
 int totalGyroXValues = 0;
 int totalGyroYValues = 0;
 int totalGyroZValues = 0;
-int i,mX,mY,mZ;
+int i;
 int motor1,motor2,motor3,motor4;
 int forward = 0;
 int strafe = 0;
@@ -80,6 +80,7 @@ volatile int channel6Cycle;
 double baseline;
 double T,P,p0,a;
 double alt = 0.0;
+double lastAlt = 0.0;
 double targetAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
 double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottle;
@@ -113,12 +114,13 @@ SFE_BMP180 pressure;
 #define ELEV_DELAY 10
 #define LAND_DELAY 20000
 #define accConv 0.0039
+#define ACC_SCALAR 0.93
 #define ESC_SCALING 1
 #define ESC_MIN 90
 #define ESC_MAX 180
 #define ROLL_OFFSET 0 //Positive Lowers Aft 4
 #define PITCH_OFFSET 0 //Positive Lowers Aft 2
-#define YAW_OFFSET 0
+#define YAW_OFFSET 11
 #define altAlpha 0.6
 #define globalAlpha 0.85
 #define forwardAlpha 0.6
@@ -138,8 +140,9 @@ SFE_BMP180 pressure;
 #define kpy 0.2
 #define kiy 0.2
 
-#define kpt 7
-#define kit 0.5
+#define kpt 10
+#define kit 0
+#define kdt 0
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -161,6 +164,14 @@ Servo Aileron;
 void setup() {
   Wire.begin(); 
   Serial.begin(38400);
+  
+  compass_x_offset = -99.62;
+  compass_y_offset = -58.63;
+  compass_z_offset = 0;
+  compass_x_gainError = 0.93;
+  compass_y_gainError = 0.98;
+  compass_z_gainError = 0.93;
+  
   initGyro(); //Setup Gyro
   initAcc();  //Setup Accelerometer
   initMag();  //Setup Magnetometer
@@ -220,10 +231,9 @@ void loop() {
   }
   
   if ((millis() - commClockOld) >= COMM_DELAY){
-    Serial.print("C 1: ");
-    Serial.println(channel1Cycle);
-    Serial.print("C 2: ");
-    Serial.println(channel2Cycle);
+    Serial.print(gps.location.lat(),6);
+    Serial.print(", ");
+    Serial.println(gps.location.lng(),6);
     Serial.print("C 3: ");
     Serial.println(channel3Cycle);
     Serial.print("C 4: ");
@@ -314,10 +324,7 @@ void initGyro() {
 }
 
 void initMag(){
-  Wire.beginTransmission(address); //open communication with HMC5883
-  Wire.write(0x02); //select mode register
-  Wire.write(0x00); //continuous measurement mode
-  Wire.endTransmission();
+  compass_init(2);
 }
 
 void initAcc(){
@@ -436,26 +443,12 @@ void getAcc(){
   accX = aX * accConv;
   accY = aY * accConv;
   accZ = aZ * accConv;
-  xAng = atan2(-accX,accZ)*(180/pi) + PITCH_OFFSET;
-  yAng = atan2(accY,accZ)*(180/pi) + ROLL_OFFSET;
+  xAng = atan2(-accX,accZ)*(180/PI) + PITCH_OFFSET;
+  yAng = atan2(accY,accZ)*(180/PI) + ROLL_OFFSET;
 }
 
 void getMag(){
-  //Tell the HMC5883 where to begin reading data
-  Wire.beginTransmission(address);
-  Wire.write(0x03); //select register 3, X MSB register
-  Wire.endTransmission();
-  
-  //Read data from each axis, 2 registers per axis
-  Wire.requestFrom(address, 6);
-  if(6<=Wire.available()){
-    mX = Wire.read()<<8; //X msb
-    mX |= Wire.read(); //X lsb
-    mZ = Wire.read()<<8; //Z msb
-    mZ |= Wire.read(); //Z lsb
-    mY = Wire.read()<<8; //Y msb
-    mY |= Wire.read(); //Y lsb
-  }
+  compass_scalled_reading();
 }
 
 void getBaro(){
@@ -478,9 +471,7 @@ void getTemp(){
 void getGPS(){
   while (Serial.available() > 0){
     if (gps.encode(Serial.read())){
-      latitude = gps.location.lat();
-      longitude = gps.location.lng();
-      targetHeading = int(TinyGPSPlus::courseTo(latitude,longitude,waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+      targetHeading = int(TinyGPSPlus::courseTo(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
       if (targetHeading > 180){targetHeading -= 360;}
       distanceCheck();
       
@@ -500,12 +491,12 @@ void kalman(){
   getAcc();
   
   //Pitch Prediction Code
-  pitchAccel = atan2(-accX,accZ)*(180.0/pi) + PITCH_OFFSET;
+  pitchAccel = atan2(-accX,accZ)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
   pitchGyro = pitchGyro + ((GyroX - biasGyroX)/14.375)*cycle;
   pitch = pitch + ((GyroX - biasGyroX)/14.375)*cycle;
   
   //Roll Prediction Code
-  rollAccel = atan2(accY,accZ) * 180.0 / pi + ROLL_OFFSET;
+  rollAccel = atan2(accY,accZ)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
   rollGyro = rollGyro - ((-GyroY - biasGyroY) / 14.375) * cycle; 
   roll = roll - ((-GyroY - biasGyroY) / 14.375) * cycle;
   
@@ -536,9 +527,9 @@ void kalman(){
 
 void calcYaw(){
   getMag();
-  CMx = mX * cos(radians(pitch-PITCH_OFFSET)) + mZ * sin(radians(pitch-PITCH_OFFSET)); //Adjusts mX reading
-  CMy = mX * sin(radians(roll-ROLL_OFFSET)) * sin(radians(pitch-PITCH_OFFSET)) + mY * cos(radians(roll-ROLL_OFFSET)) - mZ * sin(radians(roll-ROLL_OFFSET)) * cos(radians(pitch-PITCH_OFFSET)); //Adjusts mY Reading
-  yaw = atan2(CMy,CMx);
+  CMx = compass_x_scalled * cos(radians(pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(pitch-PITCH_OFFSET)); //Adjusts mX reading
+  CMy = compass_x_scalled * sin(radians(roll-ROLL_OFFSET)) * sin(radians(pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(roll-ROLL_OFFSET)) * cos(radians(pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
   if (yaw < 0){yaw += 2*PI;}
   if (yaw > 2*PI) {yaw -= 2*PI;}
   yaw = yaw * (180/PI);
@@ -567,7 +558,7 @@ void motorUpdate(){
     //Update Motors
     //Aileron.writeMicroseconds(motor1);
     //Elevator.writeMicroseconds(motor2);
-    Throttle.writeMicroseconds(throttleOut);
+    //Throttle.writeMicroseconds(throttleOut);
     Rudder.writeMicroseconds(rudderOut);
   
     //Throttle.write(globalSpeed + 90);
@@ -584,10 +575,11 @@ void elev(){
         ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
-        throttleControl = kpt * errorThrottle + ITermT;
+        throttleControl = kpt * errorThrottle + ITermT - 0.001 * ((kdt * (alt - lastAlt))/(millis() - elevClockOld));
         if (throttleControl > MAX_THROTTLE) {throttleControl = MAX_THROTTLE;}
         if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
         throttleOut = throttleControl;
+        lastAlt = alt;
       }
       elevClockOld = millis();
     }
@@ -678,14 +670,14 @@ void channel2Update(){
 }
 
 void channel3Update(){
-  if (RC_CONTROL_MODE == 0){
+  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1){
     if (digitalRead(channel3) == 1){
       channel3Start = micros();
     } else {
       channel3Cycle = micros() - channel3Start;
       Throttle.writeMicroseconds(channel3Cycle);
     }
-  } else if (RC_CONTROL_MODE == 1){
+  } else if (RC_CONTROL_MODE == 2){
     if (digitalRead(channel3) == 1){
       //channel3Start = micros();
     } else {
