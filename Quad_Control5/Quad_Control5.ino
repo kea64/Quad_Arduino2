@@ -250,8 +250,8 @@ void loop() {
     Serial.println(targetAlt);
     Serial.print("YawC: ");
     Serial.println(yawControl);
-    Serial.print("Sat: ");
-    Serial.println(gps.satellites.value());
+    Serial.print("Dist: ");
+    Serial.println(distanceToWaypoint);
     Serial.print("T Heading: ");
     Serial.println(targetHeading);
     Serial.print("Yaw: ");
@@ -623,9 +623,10 @@ void altCheck(){
   if (alt > MAX_ALTITUDE) {globalSpeed *= 0.95;}
 }
 
+
 void distanceCheck(){
-  distanceToWaypoint = int(TinyGPSPlus::distanceBetween(latitude,longitude,waypoint[waypointCounter],waypoint[waypointCounter + 1]));
-  if(distanceToWaypoint < 1){
+  distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+  if(distanceToWaypoint <= 2){
     waypointCounter += 3;
     if ((waypointCounter/3) > numWaypoint){
      waypointCounter -= 3; 
