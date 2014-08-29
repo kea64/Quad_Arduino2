@@ -87,10 +87,10 @@ double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottl
 double latitude,longitude;
 
 static const int numWaypoint = 3;
-static const double waypoint[] = {40.652875, -76.959746, 3.0,    //Waypoints
-                                  40.652916, -76.959333, 3.0,
-                                  40.653157, -76.959247, 3.0,
-                                  40.653207, -76.959039, 3.0
+static const double waypoint[] = {40.653065, -76.959676, 3.0,    //Waypoints
+                                  40.652973, -76.959376, 3.0,
+                                  40.653278, -76.959030, 3.0,
+                                  40.653374, -76.959178, 3.0
                                                             };
 
 boolean landed_True = 0;
@@ -120,7 +120,7 @@ SFE_BMP180 pressure;
 #define ESC_MAX 180
 #define ROLL_OFFSET 0 //Positive Lowers Aft 4
 #define PITCH_OFFSET 0 //Positive Lowers Aft 2
-#define YAW_OFFSET 11
+#define YAW_OFFSET 8
 #define altAlpha 0.6
 #define globalAlpha 0.85
 #define forwardAlpha 0.6
@@ -137,8 +137,8 @@ SFE_BMP180 pressure;
 #define MAX_THROTTLE 1900
 #define MIN_THROTTLE 1350
 
-#define kpy 0.2
-#define kiy 0.2
+#define kpy 0.15
+#define kiy 15
 
 #define kpt 10
 #define kit 0
@@ -165,12 +165,12 @@ void setup() {
   Wire.begin(); 
   Serial.begin(38400);
   
-  compass_x_offset = -99.62;
-  compass_y_offset = -58.63;
+  compass_x_offset = -88.27;
+  compass_y_offset = -10.86;
   compass_z_offset = 0;
-  compass_x_gainError = 0.93;
-  compass_y_gainError = 0.98;
-  compass_z_gainError = 0.93;
+  compass_x_gainError = 0.94;
+  compass_y_gainError = 0.99;
+  compass_z_gainError = 0.94;
   
   initGyro(); //Setup Gyro
   initAcc();  //Setup Accelerometer
@@ -249,7 +249,7 @@ void loop() {
     Serial.print("TargetAlt: ");
     Serial.println(targetAlt);
     Serial.print("YawC: ");
-    Serial.println(yawControl);
+    Serial.println(rudderOut);
     Serial.print("Dist: ");
     Serial.println(distanceToWaypoint);
     Serial.print("T Heading: ");
