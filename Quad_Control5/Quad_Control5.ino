@@ -27,6 +27,11 @@ Realized a single processor is inadequate to stabilize flight
 Q5:
 Prepared the Arduino as the Main Controller/Interceptor. A dedicated RC receiver will send signals to the Arduino, which may alter signals, and then sends commands to a dedicated flight controller
 Added Channel 5 to Control Auto-Pilot
+Added Turn North Control for yaw with PID tuning
+Added Altitude Hold Control for autopilot
+Calibrated Compass and associated equipment
+Added GPS Unit at hardware serial receiver. NOTICE: GPS will NOT work with software serial
+Added basic GPS navigation
 */
 
 #include <Servo.h>
@@ -139,6 +144,7 @@ SFE_BMP180 pressure;
 
 #define kpy 0.15
 #define kiy 15
+#define kdy 0
 
 #define kpt 10
 #define kit 0
@@ -550,9 +556,10 @@ void motorUpdate(){
     ITermY += (kiy * 0.001 * cycle * errorYaw);
     if (ITermY > MAX_YAW) {ITermY = MAX_YAW;}
     else if (ITermY < -MAX_YAW) {ITermY = -MAX_YAW;}
-    yawControl = kpy * errorYaw + ITermY;
+    yawControl = kpy * errorYaw + ITermY - 0.001 * ((kdy * (yaw - lastYaw))/cycle);
     if (yawControl > MAX_YAW) {yawControl = MAX_YAW;}
     if (yawControl < -MAX_YAW) {yawControl = -MAX_YAW;}
+    lastYaw = yaw;
     rudderOut = map(yawControl, -90, 90, 1000, 2000);
   
     //Update Motors
