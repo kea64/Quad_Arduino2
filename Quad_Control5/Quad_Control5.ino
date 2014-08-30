@@ -626,7 +626,7 @@ void altCheck(){
 
 void distanceCheck(){
   distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
-  if(distanceToWaypoint <= 2){
+  if(distanceToWaypoint <= 3){
     waypointCounter += 3;
     if ((waypointCounter/3) > numWaypoint){
      waypointCounter -= 3; 
