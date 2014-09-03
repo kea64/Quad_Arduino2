@@ -135,16 +135,20 @@ SFE_BMP180 pressure;
 
 #define speedAggression 1.5
 #define BARO_MODE 3
-#define MAX_ALTITUDE 4.0
+#define MAX_ALTITUDE 15.0
 #define IRPin 0
 #define IRAlpha 0.8
 #define MAX_YAW 20.0
-#define MAX_THROTTLE 1900
+#define MAX_THROTTLE 1790
 #define MIN_THROTTLE 1350
 
-#define kpy 0.15
+#define kpy 0.2
 #define kiy 15
-#define kdy 0
+#define kdy 0.1
+
+//#define kpy 0.15
+//#define kiy 15
+//#define kdy 0
 
 #define kpt 10
 #define kit 0
@@ -222,7 +226,7 @@ void loop() {
   if ((millis() - kalmanClockOld) >= KALMAN_DELAY){
     kalman(); //Almighty Kalman Filter
     calcYaw(); //Tilt Compensated Compass Code
-    motorUpdate();
+    yawPID();
   }
   
   if ((millis() - baroClockOld) >= BARO_DELAY){
@@ -237,9 +241,7 @@ void loop() {
   }
   
   if ((millis() - commClockOld) >= COMM_DELAY){
-    Serial.print(gps.location.lat(),6);
-    Serial.print(", ");
-    Serial.println(gps.location.lng(),6);
+    
     Serial.print("C 3: ");
     Serial.println(channel3Cycle);
     Serial.print("C 4: ");
@@ -269,7 +271,7 @@ void loop() {
     //Serial.print("Roll: ");
     //Serial.println(roll);
   
-  
+    
     /*
     Serial.print("Motor 1: ");
     Serial.println(motor1);
@@ -547,7 +549,7 @@ void calcAlt(){
   alt = altAlpha * alt + (1-altAlpha) * a;
 }
 
-void motorUpdate(){
+void yawPID(){
   if (RC_CONTROL_MODE == 1){
     //Yaw PID
     errorYaw = yaw - targetHeading;
@@ -561,21 +563,12 @@ void motorUpdate(){
     if (yawControl < -MAX_YAW) {yawControl = -MAX_YAW;}
     lastYaw = yaw;
     rudderOut = map(yawControl, -90, 90, 1000, 2000);
-  
-    //Update Motors
-    //Aileron.writeMicroseconds(motor1);
-    //Elevator.writeMicroseconds(motor2);
-    //Throttle.writeMicroseconds(throttleOut);
     Rudder.writeMicroseconds(rudderOut);
-  
-    //Throttle.write(globalSpeed + 90);
-    //Rudder.write(globalSpeed + 90);
   }
-  
 }
 
 void elev(){
-  if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1){
+  if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
         errorThrottle = targetAlt - alt;
@@ -590,6 +583,7 @@ void elev(){
       }
       elevClockOld = millis();
     }
+    Throttle.writeMicroseconds(throttleOut);
   }
 }
 
@@ -627,7 +621,7 @@ void freeFallDetector(){
 }
 
 void altCheck(){
-  if (alt > MAX_ALTITUDE) {globalSpeed *= 0.95;}
+  if (alt > MAX_ALTITUDE) {globalSpeed *= 0.99;}
 }
 
 
@@ -678,25 +672,21 @@ void channel2Update(){
 }
 
 void channel3Update(){
-  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1){
     if (digitalRead(channel3) == 1){
       channel3Start = micros();
     } else {
       channel3Cycle = micros() - channel3Start;
+    }
+    
+    if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1){
       Throttle.writeMicroseconds(channel3Cycle);
+    } else if (RC_CONTROL_MODE == 2){
+      //Extra mode Here
     }
-  } else if (RC_CONTROL_MODE == 2){
-    if (digitalRead(channel3) == 1){
-      //channel3Start = micros();
-    } else {
-      //channel3Cycle = micros() - channel3Start;
-      //Throttle.writeMicroseconds(channel3Cycle);
-    }
-  }
 }
 
 void channel4Update(){
-  if (RC_CONTROL_MODE == 0){
+  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 2){
     if (digitalRead(channel4) == 1){
       channel4Start = micros();
     } else {
@@ -718,9 +708,15 @@ void channel5Update(){
           ITermT = channel3Cycle;
         }
         RC_CONTROL_MODE = 1;
+        
       } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700) {
         RC_CONTROL_MODE = 0; //For Safety Purposes
+        
       } else if (channel5Cycle > 1700) {
+        if (RC_CONTROL_MODE != 2){
+          targetAlt = alt;
+          ITermT = channel3Cycle;
+        }
         RC_CONTROL_MODE = 2;
       }
         
