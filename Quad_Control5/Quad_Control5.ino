@@ -90,6 +90,7 @@ double targetAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
 double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottle;
 double latitude,longitude;
+double channel6Var = 0.0;
 
 static const int numWaypoint = 3;
 static const double waypoint[] = {40.653065, -76.959676, 3.0,    //Waypoints
@@ -150,7 +151,7 @@ SFE_BMP180 pressure;
 //#define kiy 15
 //#define kdy 0
 
-#define kpt 10
+#define kpt 5.2
 #define kit 0
 #define kdt 0
 
@@ -264,6 +265,9 @@ void loop() {
     Serial.println(targetHeading);
     Serial.print("Yaw: ");
     Serial.println(yaw);
+    Serial.print("Ch6 Var: ");
+    Serial.println(channel6Var);
+    
     
     
     //Serial.print("Gyro: ");
@@ -558,7 +562,7 @@ void yawPID(){
     ITermY += (kiy * 0.001 * cycle * errorYaw);
     if (ITermY > MAX_YAW) {ITermY = MAX_YAW;}
     else if (ITermY < -MAX_YAW) {ITermY = -MAX_YAW;}
-    yawControl = kpy * errorYaw + ITermY - 0.001 * ((kdy * (yaw - lastYaw))/cycle);
+    yawControl = kpy * errorYaw + ITermY - ((kdy * (yaw - lastYaw))/(0.001 * cycle));
     if (yawControl > MAX_YAW) {yawControl = MAX_YAW;}
     if (yawControl < -MAX_YAW) {yawControl = -MAX_YAW;}
     lastYaw = yaw;
@@ -571,11 +575,13 @@ void elev(){
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
+        channel6Var = 0.015 * (channel6Cycle - 1000);
+        if (channel6Var < 0.0) { channel6Var = 0.0;}
         errorThrottle = targetAlt - alt;
-        ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
+        ITermT += (channel6Var * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
-        throttleControl = kpt * errorThrottle + ITermT - 0.001 * ((kdt * (alt - lastAlt))/(millis() - elevClockOld));
+        throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
         if (throttleControl > MAX_THROTTLE) {throttleControl = MAX_THROTTLE;}
         if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
         throttleOut = throttleControl;
@@ -643,7 +649,7 @@ void channel1Update(){
       channel1Cycle = micros() - channel1Start;
       Aileron.writeMicroseconds(channel1Cycle);
     }
-  } else if (RC_CONTROL_MODE == 1){
+  } else if (RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (digitalRead(channel1) == 1){
       channel1Start = micros();
     } else {
@@ -661,7 +667,7 @@ void channel2Update(){
       channel2Cycle = micros() - channel2Start;
       Elevator.writeMicroseconds(channel2Cycle);
     }
-  } else if (RC_CONTROL_MODE == 1){
+  } else if (RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (digitalRead(channel2) == 1){
       channel2Start = micros();
     } else {
@@ -714,7 +720,7 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt;
+          targetAlt = alt + 2.0;
           ITermT = channel3Cycle;
         }
         RC_CONTROL_MODE = 2;
@@ -724,5 +730,12 @@ void channel5Update(){
 }
 
 void channel6Update(){
-  
+  if (RC_CONTROL_MODE == 2){
+    if (digitalRead(channel6) == 1){
+      channel6Start = micros();
+    } else {
+      channel6Cycle = micros() - channel6Start;
+      
+    }
+  }
 }
