@@ -42,7 +42,7 @@ Added basic GPS navigation
 #include <TinyGPS++.h>
 #include <compass.h>
 
-float GyroX,GyroY,GyroZ,GyroTemp,GyroTempCelsius,biasGyroX, biasGyroY, biasGyroZ, biasAccelX, biasAccelY, biasAccelZ,xAng,yAng,cycle,pitchGyro,rollGyro,pitch,roll,pitchFinal,rollFinal,yaw,accX,accY,accZ,CMy,CMx,altCorrect;
+float GyroX,GyroY,GyroZ,GyroTemp,GyroTempCelsius,xAng,yAng,cycle,pitchGyro,rollGyro,pitch,roll,pitchFinal,rollFinal,yaw,accX,accY,accZ,CMy,CMx,altCorrect;
 float globalSpeed = 0.0;
 float Max_PID = 0.0;
 float pitchAccel;
@@ -64,7 +64,6 @@ int totalGyroXValues = 0;
 int totalGyroYValues = 0;
 int totalGyroZValues = 0;
 int i;
-int motor1,motor2,motor3,motor4;
 int forward = 0;
 int strafe = 0;
 int targetHeading = 0;
@@ -151,9 +150,13 @@ SFE_BMP180 pressure;
 //#define kiy 15
 //#define kdy 0
 
-#define kpt 5.2
-#define kit 0
-#define kdt 0
+//#define kpt 6.5
+//#define kit 0.5
+//#define kdt 0
+
+#define kpt 5.5
+#define kit 0.2
+#define kdt 5
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -187,7 +190,6 @@ void setup() {
   initAcc();  //Setup Accelerometer
   initMag();  //Setup Magnetometer
   GyroCalibrate(); //Factory Setup Routine
-  GyroCalibrate2(); //Calibrates Gyro and/or other sensors
   initAngles(); //Sets the Gyro Angles to initially match the accelerometers
   
   pressure.begin();
@@ -265,6 +267,8 @@ void loop() {
     Serial.println(targetHeading);
     Serial.print("Yaw: ");
     Serial.println(yaw);
+    Serial.print("Roll: ");
+    Serial.println(roll);
     Serial.print("Ch6 Var: ");
     Serial.println(channel6Var);
     
@@ -351,10 +355,6 @@ void GyroCalibrate(){
  int tmpy = 0;
  int tmpz = 0; 
 
- g_offx = 0;
- g_offy = 0;
- g_offz = 0;
- 
  for (char i = 0;i<10;i++)
     {
     delay(10);  
@@ -367,29 +367,6 @@ void GyroCalibrate(){
  g_offy = tmpy/10;
  g_offz = tmpz/10;
  
-}
-
-void GyroCalibrate2(){
-  for (i = 0; i < 50; i += 1) {
-    getGyro();
-    getAcc();
-    totalGyroXValues += GyroX;
-    totalGyroYValues += GyroY;
-    totalGyroZValues += GyroZ;
-    //totalAccelXValues += aX;
-    //totalAccelYValues += aY;
-    //totalAccelZValues += aZ;
-    delay(20);
-  }
-  biasGyroX = totalGyroXValues / 50;
-  biasGyroY = totalGyroYValues / 50;
-  biasGyroZ = totalGyroZValues / 50;
-  //biasAccelX = totalAccelXValues / 50;
-  //biasAccelY = totalAccelYValues / 50;
-  //biasAccelZ = (totalAccelZValues / 50) - 256;
-  biasAccelX = 1;
-  biasAccelY = 1;
-  biasAccelZ = 1;
 }
 
 void initAngles(){
@@ -504,13 +481,13 @@ void kalman(){
   
   //Pitch Prediction Code
   pitchAccel = atan2(-accX,accZ)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
-  pitchGyro = pitchGyro + ((GyroX - biasGyroX)/14.375)*cycle;
-  pitch = pitch + ((GyroX - biasGyroX)/14.375)*cycle;
+  pitchGyro = pitchGyro + (GyroX/14.375)*cycle;
+  pitch = pitch + (GyroX/14.375)*cycle;
   
   //Roll Prediction Code
   rollAccel = atan2(accY,accZ)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
-  rollGyro = rollGyro - ((-GyroY - biasGyroY) / 14.375) * cycle; 
-  roll = roll - ((-GyroY - biasGyroY) / 14.375) * cycle;
+  rollGyro = rollGyro - ((-GyroY) / 14.375) * cycle; 
+  roll = roll - (-GyroY/ 14.375) * cycle;
   
   //Measurement Mode
   Pxx += cycle * (2 * Pxv + cycle * Pvv);
@@ -575,8 +552,6 @@ void elev(){
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
-        channel6Var = 0.015 * (channel6Cycle - 1000);
-        if (channel6Var < 0.0) { channel6Var = 0.0;}
         errorThrottle = targetAlt - alt;
         ITermT += (channel6Var * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
@@ -720,7 +695,7 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt + 2.0;
+          targetAlt = alt;
           ITermT = channel3Cycle;
         }
         RC_CONTROL_MODE = 2;
@@ -735,7 +710,9 @@ void channel6Update(){
       channel6Start = micros();
     } else {
       channel6Cycle = micros() - channel6Start;
-      
+      channel6Var = 0.005 * (channel6Cycle - 1000);
+      if (channel6Var < 0.0) { channel6Var = 0.0;}
     }
+    
   }
 }

@@ -1,30 +1,30 @@
 timeDelay = 0.02;
 gravityConstant = -9.81;
-sensorNoise = 0.4;
+sensorNoise = 0.2;
 
 runTime = 30;
 runClock = 0.0;
 
 iniVelocity = 0;
 velocity = iniVelocity;
-iniAlt = 1;
+iniAlt = 5;
 alt = iniAlt;
 lastAlt = iniAlt;
 sensorAlt = alt - sensorNoise + 2 * sensorNoise * rand(1);
-targetAlt = 2;
-MAX_ALT = 5;
+targetAlt = 7;
+MAX_ALT = 15;
 
 quadcopterWeight = 1.4;
 Fg = quadcopterWeight * gravityConstant;
 iniMotorServo = 1318;
 throttleOut = iniMotorServo;
-%throttleOut = 1388;
+%throttleOut = 1318;
 ITermT = iniMotorServo;
-MAX_THROTTLE = 1800;
-MIN_THROTTLE = 1100;
+MAX_THROTTLE = iniMotorServo + 25;
+MIN_THROTTLE = iniMotorServo - 25;
 
-kpt = 5;
-kit = 0.25;
+kpt = 0;
+kit = 5;
 kdt = 5;
 
 iniX = [-.25,.25,.25,-.25]; %Object Coordinates
@@ -61,7 +61,7 @@ while runClock < runTime
     velocity = velocity + netAccel * timeDelay;
     %alt = alt + iniVelocity * timeDelay + netAccel * timeDelay * runClock;
     alt = alt + velocity * timeDelay; 
-    sensorAlt = alt - sensorNoise + 2 * sensorNoise * rand(1);
+    sensorAlt = alt - (0.01 * sensorNoise * (randi(200,1,1)-100));
     if alt <= 0 
         alt = 0;
         velocity = 0;
