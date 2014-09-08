@@ -36,6 +36,10 @@ Tuned and Improved Altitude Hold Code
 Cleaned up code by eliminating unneccessary functions and variables such as GyroCalibrate2 and freefalldetector
 Added Channel 6 for PID tuning
 
+Q6:
+Removed Kalman Filter and Replaced it with Complimentary Filter -- Less Memory, Same Performance
+Tuned Magnetometer for better precision, accuracy, and tilt compensation
+
 */
 
 #include <Servo.h>
@@ -46,16 +50,9 @@ Added Channel 6 for PID tuning
 #include <TinyGPS++.h>
 #include <compass.h>
 
-float GyroX,GyroY,GyroZ,cycle,pitchGyro,rollGyro,pitch,roll,yaw,accX,accY,accZ,CMy,CMx;
+float GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx;
 float pitchAccel;
 float rollAccel;
-float gyroVar = 0.1;
-float deltaGyroVar = 0.1;
-float accelVar = 5;
-float Pxx = 0.1;
-float Pvv = 0.1;
-float Pxv = 0.1;
-float kx,kv;
 
 int aX,aY,aZ;
 int distanceToWaypoint;
@@ -104,7 +101,7 @@ boolean MODE_CHANGE = 0;
 
 char status;
 
-unsigned long kalmanClockNew,kalmanClockOld,baroClockOld,tempClockOld,commClockOld,elevClockOld,landClockOld,channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
+unsigned long compliClockNew,compliClockOld,baroClockOld,tempClockOld,commClockOld,elevClockOld,landClockOld,channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
 ADXL345 adxl;
 TinyGPSPlus gps;
@@ -112,7 +109,7 @@ SFE_BMP180 pressure;
 
 #define ITG3200_Address 0x68
 #define address 0x1E
-#define KALMAN_DELAY 5
+#define COMPLI_DELAY 5
 #define BARO_DELAY 20
 #define TEMP_DELAY 1000
 #define COMM_DELAY 250
@@ -125,11 +122,12 @@ SFE_BMP180 pressure;
 #define ESC_MAX 180
 #define ROLL_OFFSET 0 //Positive Lowers Aft 4
 #define PITCH_OFFSET 0 //Positive Lowers Aft 2
-#define YAW_OFFSET 8
+#define YAW_OFFSET 0
 #define altAlpha 0.6
 #define globalAlpha 0.85
 #define forwardAlpha 0.6
 #define strafeAlpha 0.6
+#define compliAlpha 0.98
 
 #define speedAggression 1.5
 #define BARO_MODE 3
@@ -214,7 +212,7 @@ void setup() {
   pinMode(13,OUTPUT); //GPS Lock Indicator
   digitalWrite(13,LOW);
   
-  kalmanClockOld = millis();
+  compliClockOld = millis();
   baroClockOld = millis();
   tempClockOld = millis();
   commClockOld = millis();
@@ -224,8 +222,8 @@ void setup() {
 }
 
 void loop() {
-  if ((millis() - kalmanClockOld) >= KALMAN_DELAY){
-    kalman(); //Almighty Kalman Filter
+  if ((millis() - compliClockOld) >= COMPLI_DELAY){
+    compli(); //Complimentary Filter
     calcYaw(); //Tilt Compensated Compass Code
     yawPID();
   }
@@ -267,6 +265,7 @@ void loop() {
     Serial.println(rudderOut);
     Serial.print("Ch6 Var: ");
     Serial.println(channel6Var);
+    
     
     commClockOld = millis();
   }
@@ -332,9 +331,7 @@ void GyroCalibrate(){
 void initAngles(){
   getAcc(); //Obtains Initial Angles; Quad must be motionless
   pitch = atan2(-accX,accZ)*(180/PI) + PITCH_OFFSET; //Accounts for Angle Differences
-  pitchGyro = pitch;
   roll = atan2(accY,accZ)*(180/PI) + ROLL_OFFSET;
-  rollGyro = roll;
 }
 
 void ARM_Sequence(){
@@ -414,40 +411,19 @@ void getGPS(){
   }
 }
 
-void kalman(){
-  kalmanClockNew = millis(); //Cycle Timing Code
-  cycle = (((kalmanClockNew - kalmanClockOld)*1.0)/1000.0);
+void compli(){
+  compliClockNew = millis(); //Cycle Timing Code
+  cycle = (((compliClockNew - compliClockOld)*1.0)/1000.0);
   getGyro();
   getAcc();
   
-  //Pitch Prediction Code
   pitchAccel = atan2(-accX,accZ)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
-  pitchGyro = pitchGyro + (GyroX/14.375)*cycle;
-  pitch = pitch + (GyroX/14.375)*cycle;
+  pitch = compliAlpha * (pitch + ((GyroX)/14.375) * cycle) + (1 - compliAlpha) * pitchAccel;
   
-  //Roll Prediction Code
   rollAccel = atan2(accY,accZ)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
-  rollGyro = rollGyro - ((-GyroY) / 14.375) * cycle; 
-  roll = roll - (-GyroY/ 14.375) * cycle;
+  roll = compliAlpha * (roll + ((GyroY)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
   
-  //Measurement Mode
-  Pxx += cycle * (2 * Pxv + cycle * Pvv);
-  Pxv += cycle * Pvv;
-  Pxx += cycle * gyroVar;
-  Pvv += cycle * deltaGyroVar;
-  kx = Pxx * (1 / (Pxx + accelVar));
-  kv = Pxv * (1 / (Pxx + accelVar));
-  
-  //Finish that Kalman Stuff
-  pitch += (pitchAccel - pitch) * kx;
-  roll += (rollAccel - roll) * kx;
-  
-  Pxx *= (1 - kx);
-  Pxv *= (1 - kx);
-  Pvv -= kv * Pxv;
-  
-  kalmanClockOld = millis();
-  //delay(cycleDelay);
+  compliClockOld = millis();
 }
 
 void calcYaw(){

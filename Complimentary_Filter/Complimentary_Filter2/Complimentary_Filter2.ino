@@ -19,12 +19,14 @@ unsigned long clockNew,clockOld;
 
 #define address 0x1E
 #define ITG3200_Address 0x68
-#define alpha 0.8
+#define alpha 0.98
+#define accConv 0.0039
+
 ADXL345 adxl;
 
 void setup() {
   Wire.begin(); 
-  Serial.begin(115200);
+  Serial.begin(38400);
   adxl.powerOn();
   adxl.setFreeFallThreshold(7);
   adxl.setFreeFallDuration(45);
@@ -42,19 +44,18 @@ void setup() {
 
 void loop() {
   getGyro();
-  calcGyroAng();
+  getAcc();
   calcCompli();
-  Serial.print("GyroX: ");
-  Serial.println(gyroXAng);
-  Serial.print("GyroY: ");
-  Serial.println(gyroYAng);
-  Serial.print("GyroZ: ");
-  Serial.println(gyroZAng);
   Serial.print("Pitch: ");
   Serial.println(pitch);
   Serial.print("Roll: ");
   Serial.println(roll);
-  delay(20);
+  Serial.print("Cycle: ");
+  Serial.println(cycle);
+  Serial.print("xAng: ");
+  Serial.println(xAng);
+  Serial.print("GyroY: ");
+  Serial.println((GyroY-biasGyroY)/14.375);
 }
 
 void initGyro() {
@@ -128,8 +129,8 @@ void getGyro() {
 
 void getAcc(){
   adxl.readAccel(&aX, &aY, &aZ);
-  xAng = atan2(aX,aZ)*(180/pi);
-  yAng = atan2(aY,aZ)*(180/pi);
+  xAng = atan2(aX*accConv,aZ*accConv)*(180/PI);
+  yAng = atan2(aY*accConv,aZ*accConv)*(180/PI);
   
 }
 
@@ -164,6 +165,14 @@ void sensorCalibrate() {
 }
 
 void calcCompli(){
-  pitch = alpha*gyroXAng + (1-alpha)*yAng;
-  roll = alpha*gyroYAng + (1-alpha)*xAng;
+  clockNew = millis();
+  cycle = (clockNew-clockOld);
+  //pitch = alpha*gyroXAng + (1-alpha)*yAng;
+  //roll = alpha*gyroYAng + (1-alpha)*xAng;
+  
+  pitch = alpha * (pitch + 0.001 * ((GyroX-biasGyroX)/14.375) * cycle) + (1 - alpha) * yAng;
+  roll = alpha * (roll + 0.001 * ((GyroY-biasGyroY)/14.375) * cycle) + (1 - alpha) * xAng;
+  
+  clockOld = clockNew;
+  delay(20);
 }
