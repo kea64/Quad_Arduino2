@@ -50,10 +50,6 @@ Tuned Magnetometer for better precision, accuracy, and tilt compensation
 #include <TinyGPS++.h>
 #include <compass.h>
 
-float GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx;
-float pitchAccel;
-float rollAccel;
-
 int aX,aY,aZ;
 int distanceToWaypoint;
 int g_offx = 0;
@@ -81,6 +77,7 @@ volatile int channel6Cycle;
 
 double baseline;
 double T,P,p0,a;
+double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx,pitchAccel,rollAccel;
 double alt = 0.0;
 double lastAlt = 0.0;
 double targetAlt = 1.0;
