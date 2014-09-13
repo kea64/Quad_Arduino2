@@ -52,6 +52,7 @@ Tuned Magnetometer for better precision, accuracy, and tilt compensation
 
 int aX,aY,aZ;
 int distanceToWaypoint;
+int pitchControl,rollControl,yawControl;
 int g_offx = 0;
 int g_offy = 0;
 int g_offz = 0;
@@ -82,8 +83,10 @@ double alt = 0.0;
 double lastAlt = 0.0;
 double targetAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
-double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottle;
+double errorYaw,throttleControl,errorThrottle;
 double channel6Var = 0.0;
+
+double yawPIDVar[] = {0.0,0.0,0.0};
 
 static const int numWaypoint = 3;
 static const double waypoint[] = {40.653065, -76.959676, 3.0,    //Waypoints
@@ -139,8 +142,8 @@ SFE_BMP180 pressure;
 //#define kiy 15
 //#define kdy 0.1
 
-#define kpy 0
-#define kiy 0
+#define kpy 0.3
+#define kiy 0.025
 #define kdy 0
 
 //#define kpt 6.5
@@ -222,7 +225,8 @@ void loop() {
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(); //Complimentary Filter
     calcYaw(); //Tilt Compensated Compass Code
-    yawPID();
+    yawUpdate();
+    //yawPID();
   }
   
   if ((millis() - baroClockOld) >= BARO_DELAY){
@@ -439,16 +443,16 @@ void calcAlt(){
   alt = altAlpha * alt + (1-altAlpha) * a;
 }
 
-void yawPID(){
+void yawUpdate(){
   if (RC_CONTROL_MODE == 1){
     //Yaw PID
     errorYaw = yaw - targetHeading;
     if (errorYaw <= -180){errorYaw += 360;}
     if (errorYaw > 180){errorYaw -= 360;}
-    ITermY += (kiy * 0.001 * cycle * errorYaw);
+    ITermY += (kiy * cycle * errorYaw);
     if (ITermY > MAX_YAW) {ITermY = MAX_YAW;}
     else if (ITermY < -MAX_YAW) {ITermY = -MAX_YAW;}
-    yawControl = kpy * errorYaw + ITermY - ((channel6Var * (yaw - lastYaw))/(cycle));
+    yawControl = kpy * errorYaw + ITermY - ((kdy * (yaw - lastYaw))/(cycle));
     if (yawControl > MAX_YAW) {yawControl = MAX_YAW;}
     if (yawControl < -MAX_YAW) {yawControl = -MAX_YAW;}
     lastYaw = yaw;
@@ -461,8 +465,9 @@ void elevPID(){
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
+        
         errorThrottle = targetAlt - alt;
-        ITermT += (channel6Var * 0.001 * int(millis() - elevClockOld) * errorThrottle);
+        ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
         throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
@@ -470,6 +475,8 @@ void elevPID(){
         if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
         throttleOut = throttleControl;
         lastAlt = alt;
+        
+        //PIDCalc(throttleOut,ITermT,lastAlt,alt,targetAlt,(millis()-elevClockOld),MAX_THROTTLE,MIN_THROTTLE,kpt,kit,kdt);
       }
       elevClockOld = millis();
     }
