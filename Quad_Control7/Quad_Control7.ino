@@ -40,6 +40,11 @@ Q6:
 Removed Kalman Filter and Replaced it with Complimentary Filter -- Less Memory, Same Performance
 Tuned Magnetometer for better precision, accuracy, and tilt compensation
 
+Q7: 
+Reverted to No-FC Control System
+Re-Added Re-Arm Sequence
+Re-Added Pitch and Roll PID'
+
 */
 
 #include <Servo.h>
@@ -50,24 +55,34 @@ Tuned Magnetometer for better precision, accuracy, and tilt compensation
 #include <TinyGPS++.h>
 #include <compass.h>
 
+float GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx;
+float pitchAccel;
+float rollAccel;
+
 int aX,aY,aZ;
 int distanceToWaypoint;
-int pitchControl,rollControl,yawControl;
+int Aileron;
+int Elevator;
+int Throttle;
+int Rudder;
+int motor1,motor2,motor3,motor4;
 int g_offx = 0;
 int g_offy = 0;
 int g_offz = 0;
 int totalGyroXValues = 0;
 int totalGyroYValues = 0;
 int totalGyroZValues = 0;
-int forward = 0;
-int strafe = 0;
 int targetHeading = 0;
 int IRRaw,IR;
 int hoverSpeed = 30;
-int rudderOut = 0;
-int throttleOut = 0;
+int aileronOut = 1500;
+int elevatorOut = 1500;
+int throttleOut = 1000;
+int rudderOut = 1500;
 int waypointCounter = 0;
 int RC_CONTROL_MODE = 0;
+int THROTTLE_MAX = 1800;
+int THROTTLE_MIN = 1130;
 
 volatile int channel1Cycle;
 volatile int channel2Cycle;
@@ -78,22 +93,19 @@ volatile int channel6Cycle;
 
 double baseline;
 double T,P,p0,a;
-double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx,pitchAccel,rollAccel;
 double alt = 0.0;
 double lastAlt = 0.0;
 double targetAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
-double errorYaw,throttleControl,errorThrottle;
+double pitchControl,rollControl,yawControl,errorYaw,throttleControl,errorThrottle;
 double channel6Var = 0.0;
 
-double yawPIDVar[] = {0.0,0.0,0.0};
-
-static const double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
-                                  39.956952, -75.188233, 3.0,
-                                  39.957141, -75.188185, 3.0,
-                                  39.957068, -75.188523, 3.0
+static const int numWaypoint = 3;
+static const double waypoint[] = {40.653065, -76.959676, 3.0,    //Waypoints
+                                  40.652973, -76.959376, 3.0,
+                                  40.653278, -76.959030, 3.0,
+                                  40.653374, -76.959178, 3.0
                                                             };
-static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1;
 
 boolean landed_True = 0;
 boolean landing_Enable = 0;
@@ -137,13 +149,22 @@ SFE_BMP180 pressure;
 #define MAX_YAW 20.0
 #define MAX_THROTTLE 1790
 #define MIN_THROTTLE 1350
+#define MAX_PID 25
+
+#define kpe 0
+#define kie 0
+#define kde 0
+
+#define kpa 0.5
+#define kia 0
+#define kda 0.1
 
 //#define kpy 0.2
 //#define kiy 15
 //#define kdy 0.1
 
-#define kpy 0.3
-#define kiy 0.025
+#define kpy 0
+#define kiy 0
 #define kdy 0
 
 //#define kpt 6.5
@@ -154,10 +175,10 @@ SFE_BMP180 pressure;
 #define kit 0.2
 #define kdt 5
 
-#define aileronPin A3
-#define elevatorPin A2
-#define throttlePin A1
-#define rudderPin A0
+#define motor1Pin A3
+#define motor2Pin A2
+#define motor3Pin A1
+#define motor4Pin A0
 #define channel1 4
 #define channel2 5
 #define channel3 6
@@ -166,10 +187,10 @@ SFE_BMP180 pressure;
 #define channel6 9
 #define RC_ENABLE 1
 
-Servo Throttle;
-Servo Rudder;
-Servo Elevator;
-Servo Aileron;
+Servo ESC1;
+Servo ESC2;
+Servo ESC3;
+Servo ESC4;
 
 void setup() {
   Wire.begin(); 
@@ -225,8 +246,8 @@ void loop() {
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(); //Complimentary Filter
     calcYaw(); //Tilt Compensated Compass Code
-    yawUpdate();
     //yawPID();
+    motorUpdate();
   }
   
   if ((millis() - baroClockOld) >= BARO_DELAY){
@@ -242,6 +263,34 @@ void loop() {
   
   if ((millis() - commClockOld) >= COMM_DELAY){
     
+    Serial.print("C1: ");
+    Serial.println(channel1Cycle);
+    Serial.print("C2: ");
+    Serial.println(channel2Cycle);
+    Serial.print("C3: ");
+    Serial.println(channel3Cycle);
+    Serial.print("C4: ");
+    Serial.println(channel4Cycle);
+    Serial.print("C5: ");
+    Serial.println(channel5Cycle);
+    Serial.print("C6: ");
+    Serial.println(channel6Cycle);
+    Serial.print("M1: ");
+    Serial.println(motor1);
+    Serial.print("M2: ");
+    Serial.println(motor2);
+    Serial.print("M3: ");
+    Serial.println(motor3);
+    Serial.print("M4: ");
+    Serial.println(motor4);
+    Serial.print("Roll: ");
+    Serial.println(roll);
+    Serial.print("Pitch: ");
+    Serial.println(pitch);
+    Serial.print("CH6: ");
+    Serial.println(channel6Var);
+    
+    /*
     Serial.print("C 3: ");
     Serial.println(channel3Cycle);
     Serial.print("C 4: ");
@@ -266,14 +315,14 @@ void loop() {
     Serial.println(rudderOut);
     Serial.print("Ch6 Var: ");
     Serial.println(channel6Var);
-    
+    */
     
     commClockOld = millis();
   }
   
   getGPS(); //Update GPS Data
   
-  elevPID();
+  //elevPID();
     
 }
 
@@ -336,10 +385,23 @@ void initAngles(){
 }
 
 void ARM_Sequence(){
-  Aileron.attach(aileronPin);
-  Elevator.attach(elevatorPin);
-  Throttle.attach(throttlePin);
-  Rudder.attach(rudderPin);
+  ESC1.attach(motor1Pin);
+  ESC2.attach(motor2Pin);
+  ESC3.attach(motor3Pin);
+  ESC4.attach(motor4Pin);
+  delay(20);
+  
+  ESC1.writeMicroseconds(THROTTLE_MAX);
+  ESC2.writeMicroseconds(THROTTLE_MAX);
+  ESC3.writeMicroseconds(THROTTLE_MAX);
+  ESC4.writeMicroseconds(THROTTLE_MAX);
+  delay(2000);
+  
+  ESC1.writeMicroseconds(THROTTLE_MIN);
+  ESC2.writeMicroseconds(THROTTLE_MIN);
+  ESC3.writeMicroseconds(THROTTLE_MIN);
+  ESC4.writeMicroseconds(THROTTLE_MIN);
+  
 }
 
 void getGyro() {
@@ -401,7 +463,6 @@ void getGPS(){
     if (gps.encode(Serial.read())){
       targetHeading = int(TinyGPSPlus::courseTo(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
       if (targetHeading > 180){targetHeading -= 360;}
-      targetAlt = waypoint[waypointCounter + 2];
       distanceCheck();
       
       if (gps.satellites.value() >= 5){ //GPS Lock Indicator
@@ -444,31 +505,100 @@ void calcAlt(){
   alt = altAlpha * alt + (1-altAlpha) * a;
 }
 
-void yawUpdate(){
+void motorUpdate(){
+  //Pitch PID
+  double errorPitch = map(Elevator,1000,2000,-45,45) - pitch;
+  ITermP += (kie * cycle * errorPitch);
+  if (ITermP > MAX_PID) {ITermP = MAX_PID;}
+  else if (ITermP < -MAX_PID) {ITermP = -MAX_PID;}
+  double dPitch = (pitch - lastPitch);
+  pitchControl = kpe * errorPitch + ITermP + (kde/cycle) * dPitch;
+  if (pitchControl > MAX_PID) {pitchControl = MAX_PID;}
+  if (pitchControl <= -MAX_PID) {pitchControl = -MAX_PID;}
+  lastPitch = pitch;
+  
+  
+  //Roll PID
+  double errorRoll = map(Aileron,1000,2000,-45,45) - roll;
+  ITermR += (channel6Var * cycle * errorRoll);
+  if (ITermR > MAX_PID) {ITermR = MAX_PID;}
+  else if (ITermR < -MAX_PID) {ITermR = -MAX_PID;}
+  double dRoll = (roll - lastRoll);
+  rollControl = kpa * errorRoll + ITermR - (kda/cycle) * dRoll;
+  if (rollControl > MAX_PID) {rollControl = MAX_PID;}
+  if (rollControl < -MAX_PID) {rollControl = -MAX_PID;}
+  lastRoll = roll;
+  
+  //Yaw PID
+  double errorYaw = map(Rudder,1000,2000,-90,90) - yaw;
+  ITermY += (kiy * cycle * errorYaw);
+  if (ITermY > MAX_PID) {ITermY = MAX_PID;}
+  else if (ITermY < -MAX_PID) {ITermY = -MAX_PID;}
+  double dYaw = (yaw - lastYaw);
+  yawControl = kpy * errorYaw + ITermY + (kdy/cycle) * dYaw;
+  if (yawControl > MAX_PID) {yawControl = MAX_PID;}
+  if (yawControl < -MAX_PID) {yawControl = -MAX_PID;}
+  lastYaw = yaw;
+  
+  motor1 = (Throttle - pitchControl);
+  motor3 = (Throttle + pitchControl);
+  motor2 = (Throttle - rollControl);
+  motor4 = (Throttle + rollControl);
+  
+  //Correct Over-Saturation
+  if (motor1 > THROTTLE_MAX) {motor1 = THROTTLE_MAX;}
+  if (motor2 > THROTTLE_MAX) {motor2 = THROTTLE_MAX;}
+  if (motor3 > THROTTLE_MAX) {motor3 = THROTTLE_MAX;}
+  if (motor4 > THROTTLE_MAX) {motor4 = THROTTLE_MAX;}
+  
+  //Correct Under-Saturation
+  if (motor1 < THROTTLE_MIN) {motor1 = THROTTLE_MIN;}
+  if (motor2 < THROTTLE_MIN) {motor2 = THROTTLE_MIN;}
+  if (motor3 < THROTTLE_MIN) {motor3 = THROTTLE_MIN;}
+  if (motor4 < THROTTLE_MIN) {motor4 = THROTTLE_MIN;}
+  
+  if (Throttle < 1140){
+   motor1 = THROTTLE_MIN;
+   motor2 = THROTTLE_MIN; 
+   motor3 = THROTTLE_MIN;
+   motor4 = THROTTLE_MIN;
+  }
+  
+  //Update Motors
+  //ESC1.writeMicroseconds(motor1);
+  ESC2.writeMicroseconds(motor2);
+  //ESC3.writeMicroseconds(motor3);
+  ESC4.writeMicroseconds(motor4);
+  
+  
+}
+/*
+void yawPID(){
   if (RC_CONTROL_MODE == 1){
     //Yaw PID
     errorYaw = yaw - targetHeading;
     if (errorYaw <= -180){errorYaw += 360;}
     if (errorYaw > 180){errorYaw -= 360;}
-    ITermY += (kiy * cycle * errorYaw);
+    ITermY += (kiy * 0.001 * cycle * errorYaw);
     if (ITermY > MAX_YAW) {ITermY = MAX_YAW;}
     else if (ITermY < -MAX_YAW) {ITermY = -MAX_YAW;}
-    yawControl = kpy * errorYaw + ITermY - ((kdy * (yaw - lastYaw))/(cycle));
+    yawControl = kpy * errorYaw + ITermY - ((channel6Var * (yaw - lastYaw))/(cycle));
     if (yawControl > MAX_YAW) {yawControl = MAX_YAW;}
     if (yawControl < -MAX_YAW) {yawControl = -MAX_YAW;}
     lastYaw = yaw;
-    rudderOut = map(yawControl, -90, 90, 1000, 2000);
-    Rudder.writeMicroseconds(rudderOut);
+    rudderOut = map(yawControl, -90, 90, 1000, 2000)-1500;
+    
   }
 }
+*/
 
+/*
 void elevPID(){
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
-        
         errorThrottle = targetAlt - alt;
-        ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
+        ITermT += (channel6Var * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
         throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
@@ -476,14 +606,13 @@ void elevPID(){
         if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
         throttleOut = throttleControl;
         lastAlt = alt;
-        
-        //PIDCalc(throttleOut,ITermT,lastAlt,alt,targetAlt,(millis()-elevClockOld),MAX_THROTTLE,MIN_THROTTLE,kpt,kit,kdt);
       }
       elevClockOld = millis();
     }
     Throttle.writeMicroseconds(throttleOut);
   }
 }
+*/
 
 void land(){
   if (RC_ENABLE == 0){
@@ -509,9 +638,8 @@ void distanceCheck(){
   distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
   if(distanceToWaypoint <= 3){
     waypointCounter += 3;
-    if ((waypointCounter/3) > numWaypoint && (abs(targetAlt - alt)) < 2){
-     waypointCounter = 0; 
-     //Land Code Here Perhaps
+    if ((waypointCounter/3) > numWaypoint){
+     waypointCounter -= 3; 
     }
   }
 }
@@ -522,14 +650,14 @@ void channel1Update(){
       channel1Start = micros();
     } else {
       channel1Cycle = micros() - channel1Start;
-      Aileron.writeMicroseconds(channel1Cycle);
+      Aileron = channel1Cycle;
     }
   } else if (RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (digitalRead(channel1) == 1){
       channel1Start = micros();
     } else {
       channel1Cycle = micros() - channel1Start;
-      Aileron.writeMicroseconds(channel1Cycle);
+      Aileron = channel1Cycle;
     }
   }
 }
@@ -540,14 +668,14 @@ void channel2Update(){
       channel2Start = micros();
     } else {
       channel2Cycle = micros() - channel2Start;
-      Elevator.writeMicroseconds(channel2Cycle);
+      Elevator = channel2Cycle;
     }
   } else if (RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (digitalRead(channel2) == 1){
       channel2Start = micros();
     } else {
       channel2Cycle = micros() - channel2Start;
-      Elevator.writeMicroseconds(channel2Cycle);
+      Elevator = channel2Cycle;
     }
   }
 }
@@ -560,7 +688,7 @@ void channel3Update(){
     }
     
     if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1){
-      Throttle.writeMicroseconds(channel3Cycle);
+      Throttle = channel3Cycle;
     } else if (RC_CONTROL_MODE == 2){
       //Extra mode Here
     }
@@ -572,7 +700,7 @@ void channel4Update(){
       channel4Start = micros();
     } else {
       channel4Cycle = micros() - channel4Start;
-      Rudder.writeMicroseconds(channel4Cycle);
+      Rudder = channel4Cycle;
     }
   }
 }
@@ -605,14 +733,11 @@ void channel5Update(){
 }
 
 void channel6Update(){
-  if (RC_CONTROL_MODE == 2 || RC_CONTROL_MODE == 1){
     if (digitalRead(channel6) == 1){
       channel6Start = micros();
     } else {
       channel6Cycle = micros() - channel6Start;
-      channel6Var = 0.001 * (channel6Cycle - 1000);
+      channel6Var = 0.005 * (channel6Cycle - 1000);
       if (channel6Var < 0.0) { channel6Var = 0.0;}
     }
-    
-  }
 }
