@@ -39,9 +39,6 @@ Added Channel 6 for PID tuning
 Q6:
 Removed Kalman Filter and Replaced it with Complimentary Filter -- Less Memory, Same Performance
 Tuned Magnetometer for better precision, accuracy, and tilt compensation
-Added Altitude Support in GPS Navigation
-
-
 
 */
 
