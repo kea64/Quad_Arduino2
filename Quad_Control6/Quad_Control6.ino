@@ -175,9 +175,9 @@ void setup() {
   Wire.begin(); 
   Serial.begin(38400);
   
-  compass_x_offset = -150;
-  compass_y_offset = -20;
-  compass_z_offset = 175;
+  compass_x_offset = -90;
+  compass_y_offset = -85;
+  compass_z_offset = 225;
   compass_x_gainError = 0.94;
   compass_y_gainError = 0.99;
   compass_z_gainError = 0.94;
