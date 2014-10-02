@@ -10,14 +10,16 @@ double globalSpeedRaw = 0.0;
 unsigned long newTimer,oldTimer;
 int globalSpeed = 0;
 int cycle;
+int count = 0;
+int maxCount = 300;
 
-#define altAlpha 0.6
+#define altAlpha 0.3
 #define targetAlt 1.0
 #define speedAggression 0.5
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(38400);
   pressure.begin();
   baseline = getPressure(); 
   oldTimer = millis();
@@ -26,17 +28,20 @@ void setup()
 void loop()
 {
   getAlt();
-  elev();
-  cycleTimer();
+  //elev();
+  //cycleTimer();
   
   //Serial.print("Alt: ");
   //Serial.println(alt);
   //Serial.print("Speed: ");
   //Serial.println(globalSpeedRaw);
   //Serial.print("Cycle: ");
-  Serial.println(cycle);
-  
-  delay(5);
+  //Serial.println(cycle);
+  count += 1;
+  if (count <= maxCount){
+      Serial.println(alt);
+  }
+  delay(20);
 }
 
 
