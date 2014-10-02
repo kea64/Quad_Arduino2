@@ -39,6 +39,13 @@ Added Channel 6 for PID tuning
 Q6:
 Removed Kalman Filter and Replaced it with Complimentary Filter -- Less Memory, Same Performance
 Tuned Magnetometer for better precision, accuracy, and tilt compensation
+Fixed Distance Check function to consider height 
+Added Roll and Pitch PI Navigation control (Currently Disabled)
+
+Modes:
+O - (CH5 Down) Manual Mode
+1 - (CH5 UP Full Counter) Altitude Hold + Yaw/GPS Control (Translation Navigation Disabled)
+2 - (CH% UP Full Clock) Altitude Hold
 
 */
 
@@ -52,15 +59,14 @@ Tuned Magnetometer for better precision, accuracy, and tilt compensation
 
 int aX,aY,aZ;
 int distanceToWaypoint;
-int pitchControl,rollControl,yawControl;
+int elevatorControl,aileronControl,yawControl;
+int aileronInitial,elevatorInitial;
 int g_offx = 0;
 int g_offy = 0;
 int g_offz = 0;
 int totalGyroXValues = 0;
 int totalGyroYValues = 0;
 int totalGyroZValues = 0;
-int forward = 0;
-int strafe = 0;
 int targetHeading = 0;
 int IRRaw,IR;
 int hoverSpeed = 30;
@@ -82,8 +88,8 @@ double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx,pitchAccel,
 double alt = 0.0;
 double lastAlt = 0.0;
 double targetAlt = 1.0;
-double ITermP,ITermR,ITermY,ITermT,lastPitch,lastRoll,lastYaw;
-double errorYaw,throttleControl,errorThrottle;
+double ITermP,ITermR,ITermY,ITermT,lastYaw;
+double errorYaw,throttleControl,errorThrottle,errorLongitude,errorLatitude,errorRoll,errorPitch;
 double channel6Var = 0.0;
 
 double yawPIDVar[] = {0.0,0.0,0.0};
@@ -123,18 +129,16 @@ SFE_BMP180 pressure;
 #define ROLL_OFFSET 0 //Positive Lowers Aft 4
 #define PITCH_OFFSET 0 //Positive Lowers Aft 2
 #define YAW_OFFSET 0
-#define altAlpha 0.6
-#define globalAlpha 0.85
-#define forwardAlpha 0.6
-#define strafeAlpha 0.6
+#define altAlpha 0.9
 #define compliAlpha 0.98
 
-#define speedAggression 1.5
 #define BARO_MODE 3
 #define MAX_ALTITUDE 15.0
 #define IRPin 0
 #define IRAlpha 0.8
 #define MAX_YAW 20.0
+#define MAX_ROLL 100.0
+#define MAX_PITCH 100.0
 #define MAX_THROTTLE 1790
 #define MIN_THROTTLE 1350
 
@@ -146,13 +150,19 @@ SFE_BMP180 pressure;
 #define kiy 0.025
 #define kdy 0
 
-//#define kpt 6.5
-//#define kit 0.5
-//#define kdt 0
+//#define kpt 5.5
+//#define kit 0.2
+//#define kdt 5
 
-#define kpt 5.5
-#define kit 0.2
-#define kdt 5
+#define kpt 7.9
+#define kit 0
+#define kdt 9.5
+
+#define kpp 0
+#define kip 0
+
+#define kpr 0
+#define kir 0
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -164,7 +174,9 @@ SFE_BMP180 pressure;
 #define channel4 7
 #define channel5 8
 #define channel6 9
+
 #define RC_ENABLE 1
+#define GPS_SATELLITE_MINIMUM 5
 
 Servo Throttle;
 Servo Rudder;
@@ -175,6 +187,7 @@ void setup() {
   Wire.begin(); 
   Serial.begin(38400);
   
+  //Compass Hard Offset
   compass_x_offset = -90;
   compass_y_offset = -85;
   compass_z_offset = 225;
@@ -192,7 +205,8 @@ void setup() {
   getTemp();
   getBaro();
   baseline = P;
-  ARM_Sequence();
+  
+  ARM_Sequence(); //Initialize Output to KK Board
   
   adxl.setFreeFallThreshold(8); //(5 - 9) recommended - 62.5mg per increment
   adxl.setFreeFallDuration(20); //(20 - 70) recommended - 5ms per increment
@@ -200,6 +214,7 @@ void setup() {
   adxl.setInterruptMapping( ADXL345_INT_FREE_FALL_BIT,    ADXL345_INT1_PIN );
   adxl.setInterrupt( ADXL345_INT_FREE_FALL_BIT,  1);
   
+  //Servo Read Initialize for 6 Channels
   if (RC_ENABLE == 1){
     pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Update,CHANGE);
     pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Update,CHANGE);
@@ -212,6 +227,7 @@ void setup() {
   pinMode(13,OUTPUT); //GPS Lock Indicator
   digitalWrite(13,LOW);
   
+  //Initialize State Control Timers
   compliClockOld = millis();
   baroClockOld = millis();
   tempClockOld = millis();
@@ -222,24 +238,32 @@ void setup() {
 }
 
 void loop() {
+  
+  //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(); //Complimentary Filter
     calcYaw(); //Tilt Compensated Compass Code
-    yawUpdate();
-    //yawPID();
+    //GPS Navigation Mode
+    if (RC_CONTROL_MODE == 1 || RC_ENABLE != 0){
+        yawUpdate(); // Yaw Control for navigation
+        //translationUpdate(); //Roll + Pitch Control for navigation
+    }
   }
   
+  //Altitude Sensing 
   if ((millis() - baroClockOld) >= BARO_DELAY){
     getBaro();
     calcAlt();
     baroClockOld = millis();
   }
   
+  //Temperature Sensing for Barometer -- Less frequent for Speed Optimization
   if ((millis() - tempClockOld) >= TEMP_DELAY){
     getTemp();
     tempClockOld = millis();
   }
   
+  //Communication Display Output
   if ((millis() - commClockOld) >= COMM_DELAY){
     
     Serial.print("C 3: ");
@@ -271,9 +295,9 @@ void loop() {
     commClockOld = millis();
   }
   
-  getGPS(); //Update GPS Data
+  getGPS(); //Update GPS Data and Navigation Information
   
-  elevPID();
+  elevPID(); //Altitude Hold Control
     
 }
 
@@ -404,7 +428,7 @@ void getGPS(){
       targetAlt = waypoint[waypointCounter + 2];
       distanceCheck();
       
-      if (gps.satellites.value() >= 5){ //GPS Lock Indicator
+      if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
         digitalWrite(13,HIGH);
       } else {
         digitalWrite(13,LOW);
@@ -414,6 +438,7 @@ void getGPS(){
 }
 
 void compli(){
+  //Complimentary Filter to Mix Gyro and Accelerometer Data
   compliClockNew = millis(); //Cycle Timing Code
   cycle = (((compliClockNew - compliClockOld)*1.0)/1000.0);
   getGyro();
@@ -445,7 +470,6 @@ void calcAlt(){
 }
 
 void yawUpdate(){
-  if (RC_CONTROL_MODE == 1){
     //Yaw PID
     errorYaw = yaw - targetHeading;
     if (errorYaw <= -180){errorYaw += 360;}
@@ -459,10 +483,37 @@ void yawUpdate(){
     lastYaw = yaw;
     rudderOut = map(yawControl, -90, 90, 1000, 2000);
     Rudder.writeMicroseconds(rudderOut);
-  }
+}
+
+void translationUpdate(){
+  //When Called, controls translation motion to navigate to waypoint
+  errorLongitude = waypoint[waypointCounter + 1] - gps.location.lng();
+  errorLatitude = waypoint[waypointCounter] - gps.location.lat();
+  
+  errorRoll = errorLongitude * cos(radians(yaw)) + errorLatitude * sin(radians(yaw));
+  errorPitch = errorLatitude * cos(radians(yaw)) + errorLongitude * sin(radians(yaw));
+  
+  //Strafe Motion
+  ITermR += (kir * cycle * errorRoll);
+  if (ITermR > (aileronInitial + MAX_ROLL)) {ITermR = aileronInitial + MAX_ROLL;}
+  if (ITermR > (aileronInitial - MAX_ROLL)) {ITermR = aileronInitial - MAX_ROLL;}
+  aileronControl = kpr * errorRoll + ITermR;
+  if (aileronControl > (aileronInitial + MAX_ROLL)) {aileronControl = aileronInitial + MAX_ROLL;}
+  if (aileronControl > (aileronInitial - MAX_ROLL)) {aileronControl = aileronInitial - MAX_ROLL;}
+  Aileron.writeMicroseconds(aileronControl);
+  
+  //Forward Motion
+  ITermP += (kip * cycle * errorPitch);
+  if (ITermP > (elevatorInitial + MAX_PITCH)) {ITermP = elevatorInitial + MAX_PITCH;}
+  if (ITermP > (elevatorInitial - MAX_PITCH)) {ITermP = elevatorInitial - MAX_PITCH;}
+  aileronControl = kpp * errorPitch + ITermR;
+  if (elevatorControl > (elevatorInitial + MAX_PITCH)) {elevatorControl = elevatorInitial + MAX_PITCH;}
+  if (elevatorControl > (elevatorInitial - MAX_PITCH)) {elevatorControl = elevatorInitial - MAX_PITCH;}
+  Elevator.writeMicroseconds(elevatorControl);
 }
 
 void elevPID(){
+  //Controls global motor speed to adjust height
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
@@ -471,7 +522,7 @@ void elevPID(){
         ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
-        throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
+        throttleControl = channel6Var * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
         if (throttleControl > MAX_THROTTLE) {throttleControl = MAX_THROTTLE;}
         if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
         throttleOut = throttleControl;
@@ -486,6 +537,7 @@ void elevPID(){
 }
 
 void land(){
+  //Experimental Landing Code -- Not Yet Implemented
   if (RC_ENABLE == 0){
     if(millis() - landClockOld > LAND_DELAY){
       landing_Enable = 1;
@@ -506,6 +558,7 @@ void land(){
 }
 
 void distanceCheck(){
+  //Monitors Distance to Waypoints and updates them when the quad arrives
   distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
   if(distanceToWaypoint <= 3){
     waypointCounter += 3;
@@ -587,6 +640,8 @@ void channel5Update(){
         if (RC_CONTROL_MODE != 1){
           targetAlt = alt;
           ITermT = channel3Cycle;
+          aileronInitial = channel1Cycle;
+          elevatorInitial = channel2Cycle;
         }
         RC_CONTROL_MODE = 1;
         
@@ -595,7 +650,7 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt;
+          targetAlt = alt + 2.0;
           ITermT = channel3Cycle;
         }
         RC_CONTROL_MODE = 2;
@@ -610,7 +665,7 @@ void channel6Update(){
       channel6Start = micros();
     } else {
       channel6Cycle = micros() - channel6Start;
-      channel6Var = 0.001 * (channel6Cycle - 1000);
+      channel6Var = 0.01 * (channel6Cycle - 1000);
       if (channel6Var < 0.0) { channel6Var = 0.0;}
     }
     
