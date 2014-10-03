@@ -146,8 +146,8 @@ SFE_BMP180 pressure;
 //#define kiy 15
 //#define kdy 0.1
 
-#define kpy 0.3
-#define kiy 0.025
+#define kpy 0.5
+#define kiy 0.2
 #define kdy 0
 
 //#define kpt 5.5
@@ -155,8 +155,8 @@ SFE_BMP180 pressure;
 //#define kdt 5
 
 #define kpt 7.9
-#define kit 0
-#define kdt 9.5
+#define kit 0.6
+#define kdt 11
 
 #define kpp 0
 #define kip 0
@@ -244,7 +244,7 @@ void loop() {
     compli(); //Complimentary Filter
     calcYaw(); //Tilt Compensated Compass Code
     //GPS Navigation Mode
-    if (RC_CONTROL_MODE == 1 || RC_ENABLE != 0){
+    if (RC_CONTROL_MODE == 1 || RC_ENABLE != 1){
         yawUpdate(); // Yaw Control for navigation
         //translationUpdate(); //Roll + Pitch Control for navigation
     }
@@ -522,7 +522,7 @@ void elevPID(){
         ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
-        throttleControl = channel6Var * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
+        throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
         if (throttleControl > MAX_THROTTLE) {throttleControl = MAX_THROTTLE;}
         if (throttleControl < MIN_THROTTLE) {throttleControl = MIN_THROTTLE;}
         throttleOut = throttleControl;
@@ -650,7 +650,7 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt + 2.0;
+          targetAlt = alt;
           ITermT = channel3Cycle;
         }
         RC_CONTROL_MODE = 2;
@@ -665,7 +665,7 @@ void channel6Update(){
       channel6Start = micros();
     } else {
       channel6Cycle = micros() - channel6Start;
-      channel6Var = 0.01 * (channel6Cycle - 1000);
+      channel6Var = 0.002 * (channel6Cycle - 1000);
       if (channel6Var < 0.0) { channel6Var = 0.0;}
     }
     
