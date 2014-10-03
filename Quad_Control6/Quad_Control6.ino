@@ -154,9 +154,9 @@ SFE_BMP180 pressure;
 //#define kit 0.2
 //#define kdt 5
 
-#define kpt 7.9
-#define kit 0.6
-#define kdt 11
+#define kpt 11.5
+#define kit 0
+#define kdt 15
 
 #define kpp 0
 #define kip 0
@@ -519,7 +519,7 @@ void elevPID(){
       if(millis() - elevClockOld > ELEV_DELAY){
         
         errorThrottle = targetAlt - alt;
-        ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
+        ITermT += (channel6Var * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
         throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
@@ -650,7 +650,7 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt;
+          targetAlt = alt + 2.0;
           ITermT = channel3Cycle;
         }
         RC_CONTROL_MODE = 2;
@@ -665,7 +665,7 @@ void channel6Update(){
       channel6Start = micros();
     } else {
       channel6Cycle = micros() - channel6Start;
-      channel6Var = 0.002 * (channel6Cycle - 1000);
+      channel6Var = 0.003 * (channel6Cycle - 1000);
       if (channel6Var < 0.0) { channel6Var = 0.0;}
     }
     
