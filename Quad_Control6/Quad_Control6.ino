@@ -155,7 +155,7 @@ SFE_BMP180 pressure;
 //#define kdt 5
 
 #define kpt 11.5
-#define kit 0
+#define kit 1.5
 #define kdt 15
 
 #define kpp 0
@@ -270,8 +270,6 @@ void loop() {
     Serial.println(channel3Cycle);
     Serial.print("C 4: ");
     Serial.println(channel4Cycle);
-    Serial.print("C 5: ");
-    Serial.println(channel5Cycle);
     Serial.print("RC Mode: ");
     Serial.println(RC_CONTROL_MODE);
     Serial.print("Thr Out ");
@@ -280,14 +278,16 @@ void loop() {
     Serial.println(alt);
     Serial.print("TargetAlt: ");
     Serial.println(targetAlt);
-    Serial.print("YawC: ");
-    Serial.println(rudderOut);
     Serial.print("T Heading: ");
     Serial.println(targetHeading);
     Serial.print("Yaw: ");
     Serial.println(yaw);
     Serial.print("Rud: ");
     Serial.println(rudderOut);
+    Serial.print("Latitude: ");
+    Serial.println(gps.location.lat(),6);
+    Serial.print("Longitude: ");
+    Serial.println(gps.location.lng(),6);
     Serial.print("Ch6 Var: ");
     Serial.println(channel6Var);
     
@@ -519,7 +519,7 @@ void elevPID(){
       if(millis() - elevClockOld > ELEV_DELAY){
         
         errorThrottle = targetAlt - alt;
-        ITermT += (channel6Var * 0.001 * int(millis() - elevClockOld) * errorThrottle);
+        ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
         throttleControl = kpt * errorThrottle + ITermT - ((kdt * (alt - lastAlt))/(0.001 * (millis() - elevClockOld)));
