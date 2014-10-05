@@ -45,7 +45,7 @@ Added Roll and Pitch PI Navigation control (Currently Disabled)
 Modes:
 O - (CH5 Down) Manual Mode
 1 - (CH5 UP Full Counter) Altitude Hold + Yaw/GPS Control (Translation Navigation Disabled)
-2 - (CH% UP Full Clock) Altitude Hold
+2 - (CH% UP Full Clock) Altitude Hold + Current Yaw Hold (Translation Hold Disabled)
 
 */
 
@@ -84,10 +84,11 @@ volatile int channel6Cycle;
 
 double baseline;
 double T,P,p0,a;
-double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx,pitchAccel,rollAccel;
+double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx,pitchAccel,rollAccel,targetLongitude,targetLatitude;
 double alt = 0.0;
 double lastAlt = 0.0;
 double targetAlt = 1.0;
+double targetIntAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastYaw;
 double errorYaw,throttleControl,errorThrottle,errorLongitude,errorLatitude,errorRoll,errorPitch;
 double channel6Var = 0.0;
@@ -104,6 +105,8 @@ static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1;
 boolean landed_True = 0;
 boolean landing_Enable = 0;
 boolean MODE_CHANGE = 0;
+boolean FORWARD_MODE_ENABLE = 0;
+boolean STRAFE_MODE_ENABLE = 0;
 
 char status;
 
@@ -158,10 +161,10 @@ SFE_BMP180 pressure;
 #define kit 1.5
 #define kdt 15
 
-#define kpp 0
+#define kpp 50000
 #define kip 0
 
-#define kpr 0
+#define kpr 50000
 #define kir 0
 
 #define aileronPin A3
@@ -244,9 +247,22 @@ void loop() {
     compli(); //Complimentary Filter
     calcYaw(); //Tilt Compensated Compass Code
     //GPS Navigation Mode
-    if (RC_CONTROL_MODE == 1 || RC_ENABLE != 1){
+    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
         yawUpdate(); // Yaw Control for navigation
-        //translationUpdate(); //Roll + Pitch Control for navigation
+        if (gps.satellites.value() > GPS_SATELLITE_MINIMUM){
+            //FORWARD_MODE_ENABLE = 1;
+            //STRAFE_MODE_ENABLE = 1;
+            //translationUpdate(); //Roll + Pitch Control for navigation   
+        } else {
+          FORWARD_MODE_ENABLE = 0;
+          STRAFE_MODE_ENABLE = 0;
+        }
+    }
+    //Following statement may be deleted after tuning translation
+    if (RC_CONTROL_MODE == 1){
+      yawUpdate();
+      FORWARD_MODE_ENABLE = 0;
+      STRAFE_MODE_ENABLE = 0;
     }
   }
   
@@ -266,6 +282,10 @@ void loop() {
   //Communication Display Output
   if ((millis() - commClockOld) >= COMM_DELAY){
     
+    Serial.print("C 1: ");
+    Serial.println(channel1Cycle);
+    Serial.print("C 2: ");
+    Serial.println(channel2Cycle);
     Serial.print("C 3: ");
     Serial.println(channel3Cycle);
     Serial.print("C 4: ");
@@ -278,6 +298,8 @@ void loop() {
     Serial.println(alt);
     Serial.print("TargetAlt: ");
     Serial.println(targetAlt);
+    Serial.print("TargetIntAlt: ");
+    Serial.println(targetIntAlt);
     Serial.print("T Heading: ");
     Serial.println(targetHeading);
     Serial.print("Yaw: ");
@@ -290,7 +312,18 @@ void loop() {
     Serial.println(gps.location.lng(),6);
     Serial.print("Ch6 Var: ");
     Serial.println(channel6Var);
-    
+    Serial.print("Roll: ");
+    Serial.println(aileronControl);
+    Serial.print("Pitch: ");
+    Serial.println(elevatorControl);
+    Serial.print("Err Roll: ");
+    Serial.println(errorRoll,6);
+    Serial.print("Err Pitch: ");
+    Serial.println(errorPitch,6);
+    Serial.print("Err Latitude: ");
+    Serial.println(errorLatitude,6);
+    Serial.print("Err Longitude: ");
+    Serial.println(errorLongitude,6);
     
     commClockOld = millis();
   }
@@ -423,9 +456,11 @@ void getTemp(){
 void getGPS(){
   while (Serial.available() > 0){
     if (gps.encode(Serial.read())){
-      targetHeading = int(TinyGPSPlus::courseTo(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
-      if (targetHeading > 180){targetHeading -= 360;}
-      targetAlt = waypoint[waypointCounter + 2];
+      if (RC_CONTROL_MODE == 1){
+        targetAlt = waypoint[waypointCounter + 2];
+        targetHeading = int(TinyGPSPlus::courseTo(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+        if (targetHeading > 180){targetHeading -= 360;}
+      }
       distanceCheck();
       
       if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
@@ -487,28 +522,33 @@ void yawUpdate(){
 
 void translationUpdate(){
   //When Called, controls translation motion to navigate to waypoint
-  errorLongitude = waypoint[waypointCounter + 1] - gps.location.lng();
-  errorLatitude = waypoint[waypointCounter] - gps.location.lat();
+  if (RC_CONTROL_MODE == 1){
+    targetLongitude = waypoint[waypointCounter + 1];
+    targetLatitude = waypoint[waypointCounter];
+  }
   
-  errorRoll = errorLongitude * cos(radians(yaw)) + errorLatitude * sin(radians(yaw));
-  errorPitch = errorLatitude * cos(radians(yaw)) + errorLongitude * sin(radians(yaw));
+  errorLongitude = targetLongitude - gps.location.lng();
+  errorLatitude = targetLatitude - gps.location.lat();
+  
+  errorRoll = -(errorLongitude * cos(radians(yaw+20)) + errorLatitude * sin(radians(yaw+20)));
+  errorPitch = -(errorLatitude * cos(radians(yaw)) + errorLongitude * sin(radians(yaw)));
   
   //Strafe Motion
   ITermR += (kir * cycle * errorRoll);
-  if (ITermR > (aileronInitial + MAX_ROLL)) {ITermR = aileronInitial + MAX_ROLL;}
-  if (ITermR > (aileronInitial - MAX_ROLL)) {ITermR = aileronInitial - MAX_ROLL;}
-  aileronControl = kpr * errorRoll + ITermR;
+  if (ITermR > MAX_ROLL) {ITermR = MAX_ROLL;}
+  if (ITermR < -MAX_ROLL) {ITermR = -MAX_ROLL;}
+  aileronControl = kpr * errorRoll + ITermR + aileronInitial;
   if (aileronControl > (aileronInitial + MAX_ROLL)) {aileronControl = aileronInitial + MAX_ROLL;}
-  if (aileronControl > (aileronInitial - MAX_ROLL)) {aileronControl = aileronInitial - MAX_ROLL;}
+  if (aileronControl < (aileronInitial - MAX_ROLL)) {aileronControl = aileronInitial - MAX_ROLL;}
   Aileron.writeMicroseconds(aileronControl);
   
   //Forward Motion
   ITermP += (kip * cycle * errorPitch);
-  if (ITermP > (elevatorInitial + MAX_PITCH)) {ITermP = elevatorInitial + MAX_PITCH;}
-  if (ITermP > (elevatorInitial - MAX_PITCH)) {ITermP = elevatorInitial - MAX_PITCH;}
-  aileronControl = kpp * errorPitch + ITermR;
+  if (ITermP > MAX_PITCH) {ITermP = MAX_PITCH;}
+  if (ITermP < -MAX_PITCH) {ITermP = -MAX_PITCH;}
+  elevatorControl = kpp * errorPitch + ITermR + elevatorInitial;
   if (elevatorControl > (elevatorInitial + MAX_PITCH)) {elevatorControl = elevatorInitial + MAX_PITCH;}
-  if (elevatorControl > (elevatorInitial - MAX_PITCH)) {elevatorControl = elevatorInitial - MAX_PITCH;}
+  if (elevatorControl < (elevatorInitial - MAX_PITCH)) {elevatorControl = elevatorInitial - MAX_PITCH;}
   Elevator.writeMicroseconds(elevatorControl);
 }
 
@@ -517,8 +557,9 @@ void elevPID(){
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
-        
-        errorThrottle = targetAlt - alt;
+        if (targetIntAlt < targetAlt){targetIntAlt += 0.03;}
+        if (targetIntAlt > targetAlt){targetIntAlt -= 0.03;}
+        errorThrottle = targetIntAlt - alt;
         ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}
@@ -570,38 +611,28 @@ void distanceCheck(){
 }
 
 void channel1Update(){
-  if (RC_CONTROL_MODE == 0){
+  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1 || (STRAFE_MODE_ENABLE == 0 && RC_CONTROL_MODE == 2)){
     if (digitalRead(channel1) == 1){
       channel1Start = micros();
     } else {
       channel1Cycle = micros() - channel1Start;
       Aileron.writeMicroseconds(channel1Cycle);
     }
-  } else if (RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
-    if (digitalRead(channel1) == 1){
-      channel1Start = micros();
-    } else {
-      channel1Cycle = micros() - channel1Start;
-      Aileron.writeMicroseconds(channel1Cycle);
-    }
+  } else if (RC_CONTROL_MODE == 2 && STRAFE_MODE_ENABLE == 1){
+    //Special Code Here?
   }
 }
 
 void channel2Update(){
-  if (RC_CONTROL_MODE == 0){
+  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1 || (FORWARD_MODE_ENABLE == 0 && RC_CONTROL_MODE == 2)){
     if (digitalRead(channel2) == 1){
       channel2Start = micros();
     } else {
       channel2Cycle = micros() - channel2Start;
       Elevator.writeMicroseconds(channel2Cycle);
     }
-  } else if (RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
-    if (digitalRead(channel2) == 1){
-      channel2Start = micros();
-    } else {
-      channel2Cycle = micros() - channel2Start;
-      Elevator.writeMicroseconds(channel2Cycle);
-    }
+  } else if (RC_CONTROL_MODE == 2 && FORWARD_MODE_ENABLE == 1){
+    //Special Code Here?
   }
 }
 
@@ -612,7 +643,7 @@ void channel3Update(){
       channel3Cycle = micros() - channel3Start;
     }
     
-    if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1){
+    if (RC_CONTROL_MODE == 0){
       Throttle.writeMicroseconds(channel3Cycle);
     } else if (RC_CONTROL_MODE == 2){
       //Extra mode Here
@@ -620,7 +651,7 @@ void channel3Update(){
 }
 
 void channel4Update(){
-  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 2){
+  if (RC_CONTROL_MODE == 0){
     if (digitalRead(channel4) == 1){
       channel4Start = micros();
     } else {
@@ -639,6 +670,7 @@ void channel5Update(){
       if (channel5Cycle < 1300){
         if (RC_CONTROL_MODE != 1){
           targetAlt = alt;
+          targetIntAlt = alt;
           ITermT = channel3Cycle;
           aileronInitial = channel1Cycle;
           elevatorInitial = channel2Cycle;
@@ -650,8 +682,14 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt + 2.0;
+          targetAlt = alt + 3.0;
+          targetIntAlt = alt;
           ITermT = channel3Cycle;
+          targetHeading = yaw;
+          aileronInitial = channel1Cycle;
+          elevatorInitial = channel2Cycle;
+          targetLatitude = gps.location.lat();
+          targetLongitude = gps.location.lng();
         }
         RC_CONTROL_MODE = 2;
       }
