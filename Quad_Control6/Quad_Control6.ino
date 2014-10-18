@@ -45,7 +45,7 @@ Added Roll and Pitch PI Navigation control (Currently Disabled)
 Modes:
 O - (CH5 Down) Manual Mode
 1 - (CH5 UP Full Counter) Altitude Hold + Yaw/GPS Control (Translation Navigation Disabled)
-2 - (CH% UP Full Clock) Altitude Hold + Current Yaw Hold (Translation Hold Disabled)
+2 - (CH% UP Full Clock) Altitude Hold + Current Yaw Hold + Translation Hold
 
 */
 
@@ -161,11 +161,11 @@ SFE_BMP180 pressure;
 #define kit 1.5
 #define kdt 15
 
-#define kpp 50000
-#define kip 0
+#define kpp 250000
+#define kip 100000
 
-#define kpr 50000
-#define kir 0
+#define kpr 250000
+#define kir 100000
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -249,10 +249,11 @@ void loop() {
     //GPS Navigation Mode
     if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
         yawUpdate(); // Yaw Control for navigation
+        //If GPS Locked, Enable Translation Mode
         if (gps.satellites.value() > GPS_SATELLITE_MINIMUM){
-            //FORWARD_MODE_ENABLE = 1;
-            //STRAFE_MODE_ENABLE = 1;
-            //translationUpdate(); //Roll + Pitch Control for navigation   
+            FORWARD_MODE_ENABLE = 1;
+            STRAFE_MODE_ENABLE = 1;
+            translationUpdate(); //Roll + Pitch Control for navigation   
         } else {
           FORWARD_MODE_ENABLE = 0;
           STRAFE_MODE_ENABLE = 0;
@@ -501,7 +502,8 @@ void calcYaw(){
 
 void calcAlt(){
   a = pressure.altitude(P,baseline);
-  alt = altAlpha * alt + (1-altAlpha) * a;
+  
+  alt = altAlpha * alt + (1-altAlpha) * a; //Heavy Barometer Filtering
 }
 
 void yawUpdate(){
@@ -530,14 +532,14 @@ void translationUpdate(){
   errorLongitude = targetLongitude - gps.location.lng();
   errorLatitude = targetLatitude - gps.location.lat();
   
-  errorRoll = -(errorLongitude * cos(radians(yaw+20)) + errorLatitude * sin(radians(yaw+20)));
+  errorRoll = (errorLongitude * cos(radians(yaw)) + errorLatitude * sin(radians(yaw)));
   errorPitch = -(errorLatitude * cos(radians(yaw)) + errorLongitude * sin(radians(yaw)));
   
   //Strafe Motion
   ITermR += (kir * cycle * errorRoll);
   if (ITermR > MAX_ROLL) {ITermR = MAX_ROLL;}
   if (ITermR < -MAX_ROLL) {ITermR = -MAX_ROLL;}
-  aileronControl = kpr * errorRoll + ITermR + aileronInitial;
+  aileronControl = channel6Var * errorRoll + ITermR + aileronInitial;
   if (aileronControl > (aileronInitial + MAX_ROLL)) {aileronControl = aileronInitial + MAX_ROLL;}
   if (aileronControl < (aileronInitial - MAX_ROLL)) {aileronControl = aileronInitial - MAX_ROLL;}
   Aileron.writeMicroseconds(aileronControl);
@@ -546,7 +548,7 @@ void translationUpdate(){
   ITermP += (kip * cycle * errorPitch);
   if (ITermP > MAX_PITCH) {ITermP = MAX_PITCH;}
   if (ITermP < -MAX_PITCH) {ITermP = -MAX_PITCH;}
-  elevatorControl = kpp * errorPitch + ITermR + elevatorInitial;
+  elevatorControl = channel6Var * errorPitch + ITermR + elevatorInitial;
   if (elevatorControl > (elevatorInitial + MAX_PITCH)) {elevatorControl = elevatorInitial + MAX_PITCH;}
   if (elevatorControl < (elevatorInitial - MAX_PITCH)) {elevatorControl = elevatorInitial - MAX_PITCH;}
   Elevator.writeMicroseconds(elevatorControl);
@@ -557,8 +559,11 @@ void elevPID(){
   if (RC_ENABLE == 0 || RC_CONTROL_MODE == 1 || RC_CONTROL_MODE == 2){
     if (!landing_Enable){
       if(millis() - elevClockOld > ELEV_DELAY){
+        
+        //Elevation Change Smoothing -- Delays Target Altitude to Maximize I Gain
         if (targetIntAlt < targetAlt){targetIntAlt += 0.03;}
         if (targetIntAlt > targetAlt){targetIntAlt -= 0.03;}
+        
         errorThrottle = targetIntAlt - alt;
         ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
@@ -637,6 +642,9 @@ void channel2Update(){
 }
 
 void channel3Update(){
+  
+    //NOTE: May need rephrasing for maximizing other processes. Still not sure if necessary to run indefinitely  
+
     if (digitalRead(channel3) == 1){
       channel3Start = micros();
     } else {
@@ -682,7 +690,7 @@ void channel5Update(){
         
       } else if (channel5Cycle > 1700) {
         if (RC_CONTROL_MODE != 2){
-          targetAlt = alt + 3.0;
+          targetAlt = alt;
           targetIntAlt = alt;
           ITermT = channel3Cycle;
           targetHeading = yaw;
@@ -703,7 +711,7 @@ void channel6Update(){
       channel6Start = micros();
     } else {
       channel6Cycle = micros() - channel6Start;
-      channel6Var = 0.003 * (channel6Cycle - 1000);
+      channel6Var = 2000.0 * (channel6Cycle - 1000);
       if (channel6Var < 0.0) { channel6Var = 0.0;}
     }
     
