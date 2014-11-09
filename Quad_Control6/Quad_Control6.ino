@@ -100,6 +100,7 @@ static const double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
                                   39.957141, -75.188185, 3.0,
                                   39.957068, -75.188523, 3.0
                                                             };
+                                                            
 static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1;
 
 boolean landed_True = 0;
@@ -537,18 +538,18 @@ void translationUpdate(){
   
   //Strafe Motion
   ITermR += (kir * cycle * errorRoll);
-  if (ITermR > MAX_ROLL) {ITermR = MAX_ROLL;}
-  if (ITermR < -MAX_ROLL) {ITermR = -MAX_ROLL;}
-  aileronControl = channel6Var * errorRoll + ITermR + aileronInitial;
+  if (ITermR > aileronInitial + MAX_ROLL) {ITermR = aileronInitial + MAX_ROLL;}
+  if (ITermR < aileronInitial - MAX_ROLL) {ITermR = aileronInitial - MAX_ROLL;}
+  aileronControl = channel6Var * errorRoll + ITermR;
   if (aileronControl > (aileronInitial + MAX_ROLL)) {aileronControl = aileronInitial + MAX_ROLL;}
   if (aileronControl < (aileronInitial - MAX_ROLL)) {aileronControl = aileronInitial - MAX_ROLL;}
   Aileron.writeMicroseconds(aileronControl);
   
   //Forward Motion
   ITermP += (kip * cycle * errorPitch);
-  if (ITermP > MAX_PITCH) {ITermP = MAX_PITCH;}
-  if (ITermP < -MAX_PITCH) {ITermP = -MAX_PITCH;}
-  elevatorControl = channel6Var * errorPitch + ITermR + elevatorInitial;
+  if (ITermP > elevatorInitial + MAX_PITCH) {ITermP = elevatorInitial + MAX_PITCH;}
+  if (ITermP < elevatorInitial - MAX_PITCH) {ITermP = elevatorInitial - MAX_PITCH;}
+  elevatorControl = channel6Var * errorPitch + ITermP;
   if (elevatorControl > (elevatorInitial + MAX_PITCH)) {elevatorControl = elevatorInitial + MAX_PITCH;}
   if (elevatorControl < (elevatorInitial - MAX_PITCH)) {elevatorControl = elevatorInitial - MAX_PITCH;}
   Elevator.writeMicroseconds(elevatorControl);
@@ -696,6 +697,8 @@ void channel5Update(){
           targetHeading = yaw;
           aileronInitial = channel1Cycle;
           elevatorInitial = channel2Cycle;
+          ITermR = channel1Cycle;
+          ITermP = channel2Cycle;
           targetLatitude = gps.location.lat();
           targetLongitude = gps.location.lng();
         }
