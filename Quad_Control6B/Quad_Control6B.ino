@@ -26,6 +26,7 @@
 #define YAW_OFFSET 0
 #define altAlpha 0.9
 #define compliAlpha 0.98
+#define GPSAlpha 1.000000
 
 #define BARO_MODE 3
 #define MAX_ALTITUDE 15.0
@@ -54,10 +55,10 @@
 #define kdt 15
 
 #define kpp 250000
-#define kip 100000
+#define kip 0
 
 #define kpr 250000
-#define kir 100000
+#define kir 0
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -80,12 +81,18 @@ volatile int channel4Cycle;
 volatile int channel5Cycle;
 volatile int channel6Cycle;
 
-int RC_CONTROL_MODE = 0;
-
-boolean STRAFE_MODE_ENABLE, FORWARD_MODE_ENABLE;
-
 unsigned long channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
+double channel6Var;
+
+static const double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
+                                  39.956952, -75.188233, 3.0,
+                                  39.957141, -75.188185, 3.0,
+                                  39.957068, -75.188523, 3.0
+                                                            };
+
+static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1;                                                           
+     
 ADXL345 adxl;
 TinyGPSPlus gps;
 SFE_BMP180 pressure;
@@ -108,35 +115,53 @@ void setup(){
    initServo();
    pressure.begin();
    
+   pinMode(13,OUTPUT); //GPS Lock Indicator
+   digitalWrite(13,LOW);
+  
+   //Servo Read Initialize for 6 Channels
+  if (RC_ENABLE == 1){
+    pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Interrupt,CHANGE);
+    pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Interrupt,CHANGE);
+    pinMode(channel3,INPUT);digitalWrite(channel3,HIGH);PCintPort::attachInterrupt(channel3,&channel3Interrupt,CHANGE);
+    pinMode(channel4,INPUT);digitalWrite(channel4,HIGH);PCintPort::attachInterrupt(channel4,&channel4Interrupt,CHANGE);
+    pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Interrupt,CHANGE);
+    pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Interrupt,CHANGE);
+  }
+   
 }
 
 //----------------------------MAIN/SETUP----------------------------------//
 
 
 void loop(){
-  double gyroX, gyroY, gyroZ, accX, accY, accZ, gyroOffsetX, gyroOffsetY, gyroOffsetZ, pitch, roll, cycle;
+  double gyroX, gyroY, gyroZ, accX, accY, accZ, gyroOffsetX, gyroOffsetY, gyroOffsetZ, pitch, roll, cycle, yaw, latitude, longitude, targetLatitude, targetLongitude;
+  double ITermT, ITermP, ITermR;
+  double baseline, T, P, p0, a;
+  double alt = 0.0;
+  double targetAlt = 1.0;
+  double targetIntAlt = 1.0;
   
   unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, elevClockOld, landClockOld;
 
   int aX, aY, aZ;
-  int tempVar = 1;
+  int targetHeading;
+  int elevatorInitial, aileronInitial;
+  int RC_CONTROL_MODE = 0;
+  int waypointCounter = 0;
   
-  gyroCalibrate(gyroX, gyroY, gyroZ, gyroOffsetX, gyroOffsetY, gyroOffsetZ);
+  bool AUTO_ROLL = 0;
+  bool AUTO_PITCH = 0;
+  bool AUTO_YAW = 0;
+  bool AUTO_THROTTLE = 0;
   
-  //Servo Read Initialize for 6 Channels
-  if (RC_ENABLE == 1){
-    pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Update,CHANGE);
-    pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Update,CHANGE);
-    pinMode(channel3,INPUT);digitalWrite(channel3,HIGH);PCintPort::attachInterrupt(channel3,&channel3Update,CHANGE);
-    pinMode(channel4,INPUT);digitalWrite(channel4,HIGH);PCintPort::attachInterrupt(channel4,&channel4Update,CHANGE);
-    //pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Update,CHANGE);
-    //pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Update,CHANGE);
-  }
+  calibrateGyro(gyroX, gyroY, gyroZ, gyroOffsetX, gyroOffsetY, gyroOffsetZ);
   
-  pinMode(13,OUTPUT); //GPS Lock Indicator
-  digitalWrite(13,LOW);
+  pressure.begin();
+  updateTemp(T);
+  updateBaro(P, T);
+  baseline = P;
   
-  //Initialize State Control Timers
+  //Reset State Control Timers
   compliClockOld = millis();
   baroClockOld = millis();
   tempClockOld = millis();
@@ -150,13 +175,22 @@ void loop(){
 
   while(1==1){
     
+    
     updateGyro(gyroX, gyroY, gyroZ, gyroOffsetX, gyroOffsetY, gyroOffsetZ);
     updateAcc(accX, accY, accZ, aX, aY, aZ);
     
+    checkBaro(P, T, baseline, alt, baroClockOld);
+    
+    checkTemp(T, tempClockOld);
+    
+    processInterrupts(RC_CONTROL_MODE, AUTO_ROLL, AUTO_PITCH, AUTO_THROTTLE, AUTO_YAW, yaw, latitude, longitude, alt, waypointCounter, targetAlt, targetIntAlt, ITermT, ITermR, ITermP, targetHeading, aileronInitial, elevatorInitial, targetLatitude, targetLongitude);
+    
+    checkDistance(waypointCounter, targetAlt, alt);
   }
 }
 
 //----------------------------Functions----------------------------------//
+//_______________________________________________________________________//
 
 void initGyro() {
    Wire.beginTransmission(ITG3200_Address); 
@@ -199,7 +233,7 @@ void initMag(){
   compass_init(2);
 }
 
-void gyroCalibrate(double &gyroX, double &gyroY, double &gyroZ, double &gyroOffsetX, double &gyroOffsetY, double &gyroOffsetZ){
+void calibrateGyro(double &gyroX, double &gyroY, double &gyroZ, double &gyroOffsetX, double &gyroOffsetY, double &gyroOffsetZ){
  int tmpx = 0;
  int tmpy = 0;
  int tmpz = 0; 
@@ -265,126 +299,268 @@ void updateMag(){
   compass_scalled_reading();
 }
 
-/*
-void compli(double &roll, double &pitch, double &compliClockNew, double &compliClockOld, double &cycle){
+void updateBaro(double &P, double &T){
+  char status = pressure.startPressure(BARO_MODE);
+  if (status != 0){
+    delay(status);
+    status = pressure.getPressure(P,T);
+  }      
+}
+
+void updateTemp(double &T){
+  char status = pressure.startTemperature();
+  if (status != 0)
+  {
+    delay(status);
+    status = pressure.getTemperature(T);
+  }
+}
+
+void updateGPS(double &latitude, double &longitude){
+  while (Serial.available() > 0){
+    if (gps.encode(Serial.read())){
+      
+      if (gps.location.lat() != 0.0){
+        if (millis() < 2000){
+          latitude = gps.location.lat();
+          longitude = gps.location.lng();
+        } else {
+          latitude = gps.location.lat() * GPSAlpha + (1 - GPSAlpha) * latitude;
+          longitude = gps.location.lng() * GPSAlpha + (1 - GPSAlpha) * longitude;
+        }
+      }
+      
+      if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
+        digitalWrite(13,HIGH);
+      } else {
+        digitalWrite(13,LOW);
+      }
+    }
+  }
+}
+
+void compli(double &gyroX, double &gyroY, double &gyroZ, double gyroOffsetX, double gyroOffsetY, double gyroOffsetZ, double &accX, double &accY, double &accZ, int &aX, int &aY, int &aZ, double &roll, double &pitch, unsigned long compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
-  compliClockNew = millis(); //Cycle Timing Code
-  cycle = (((compliClockNew - compliClockOld)*1.0)/1000.0);
-  getGyro();
-  getAcc();
+  double cycle = (((millis() - compliClockOld)*1.0)/1000.0);
+  updateGyro(gyroX, gyroY, gyroZ, gyroOffsetX, gyroOffsetY, gyroOffsetZ);
+  updateAcc(accX, accY, accZ, aX, aY, aZ);
   
-  double pitchAccel = degrees(atan2(-accX,accZ))*ACC_SCALAR + PITCH_OFFSET;
-  pitch = compliAlpha * (pitch + ((GyroX)/14.375) * cycle) + (1 - compliAlpha) * pitchAccel;
+  double pitchAccel = atan2(-accX,accZ)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
+  pitch = compliAlpha * (pitch + ((gyroX)/14.375) * cycle) + (1 - compliAlpha) * pitchAccel;
   
-  double rollAccel = degrees(atan2(accY,accZ))*ACC_SCALAR + ROLL_OFFSET;
-  roll = compliAlpha * (roll + ((GyroY)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
+  double rollAccel = atan2(accY,accZ)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
+  roll = compliAlpha * (roll + ((gyroY)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
   
   compliClockOld = millis();
 }
-*/
 
-void channel1Update(){
-  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1 || (STRAFE_MODE_ENABLE == 0 && RC_CONTROL_MODE == 2)){
-    if (digitalRead(channel1) == 1){
+void calcYaw(double roll, double pitch, double &yaw){
+  updateMag();
+  double CMx = compass_x_scalled * cos(radians(pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(pitch-PITCH_OFFSET)); //Adjusts mX reading
+  double CMy = compass_x_scalled * sin(radians(roll-ROLL_OFFSET)) * sin(radians(pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(roll-ROLL_OFFSET)) * cos(radians(pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
+  if (yaw < 0){yaw += 2*PI;}
+  if (yaw > 2*PI) {yaw -= 2*PI;}
+  yaw = yaw * (180/PI);
+  if (yaw <= 360 && yaw > 180) {yaw -= 360;}
+}
+
+void calcAlt(double P, double baseline, double &alt){
+  double a = pressure.altitude(P,baseline);
+  
+  alt = altAlpha * alt + (1-altAlpha) * a; //Heavy Barometer Filtering
+}
+
+void checkDistance(int &waypointCounter, double targetAlt, double alt){
+  //Monitors Distance to Waypoints and updates them when the quad arrives
+  int distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+  if(distanceToWaypoint <= 3){
+    waypointCounter += 3;
+    if ((waypointCounter/3) > numWaypoint && (abs(targetAlt - alt)) < 2){
+     waypointCounter = 0; 
+     //Land Code Here Perhaps
+    }
+  }
+}
+
+void channel1Interrupt(){
+  if (digitalRead(channel1) == 1){
       channel1Start = micros();
-    } else {
+  } else {
       channel1Cycle = micros() - channel1Start;
-      Aileron.writeMicroseconds(channel1Cycle);
-    }
-  } else if (RC_CONTROL_MODE == 2 && STRAFE_MODE_ENABLE == 1){
-    //Special Code Here?
   }
-  *tempVar++;
 }
 
-void channel2Update(){
-  if (RC_CONTROL_MODE == 0 || RC_CONTROL_MODE == 1 || (FORWARD_MODE_ENABLE == 0 && RC_CONTROL_MODE == 2)){
-    if (digitalRead(channel2) == 1){
+void channel2Interrupt(){
+  if (digitalRead(channel2) == 1){
       channel2Start = micros();
-    } else {
+  } else {
       channel2Cycle = micros() - channel2Start;
-      Elevator.writeMicroseconds(channel2Cycle);
-    }
-  } else if (RC_CONTROL_MODE == 2 && FORWARD_MODE_ENABLE == 1){
-    //Special Code Here?
   }
 }
 
-void channel3Update(){
-  
-    //NOTE: May need rephrasing for maximizing other processes. Still not sure if necessary to run indefinitely  
-
-    if (digitalRead(channel3) == 1){
+void channel3Interrupt(){
+  if (digitalRead(channel3) == 1){
       channel3Start = micros();
-    } else {
+  } else {
       channel3Cycle = micros() - channel3Start;
-    }
-    
-    if (RC_CONTROL_MODE == 0){
-      Throttle.writeMicroseconds(channel3Cycle);
-    } else if (RC_CONTROL_MODE == 2){
-      //Extra mode Here
-    }
-}
-
-void channel4Update(){
-  if (RC_CONTROL_MODE == 0){
-    if (digitalRead(channel4) == 1){
-      channel4Start = micros();
-    } else {
-      channel4Cycle = micros() - channel4Start;
-      Rudder.writeMicroseconds(channel4Cycle);
-    }
   }
 }
 
-/*
-void channel5Update(){
-  
-    if (digitalRead(channel5) == 1){
+void channel4Interrupt(){
+  if (digitalRead(channel4) == 1){
+      channel4Start = micros();
+  } else {
+      channel4Cycle = micros() - channel4Start;
+  }
+}
+
+void channel5Interrupt(){
+  if (digitalRead(channel5) == 1){
       channel5Start = micros();
-    } else {
+  } else {
       channel5Cycle = micros() - channel5Start;
-      if (channel5Cycle < 1300){
-        if (RC_CONTROL_MODE != 1){
-          targetAlt = alt;
-          targetIntAlt = alt;
-          ITermT = channel3Cycle;
-          aileronInitial = channel1Cycle;
-          elevatorInitial = channel2Cycle;
-        }
-        RC_CONTROL_MODE = 1;
-        
-      } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700) {
-        RC_CONTROL_MODE = 0; //For Safety Purposes
-        
-      } else if (channel5Cycle > 1700) {
-        if (RC_CONTROL_MODE != 2){
+  }
+}
+
+void channel6Interrupt(){
+  if (digitalRead(channel6) == 1){
+      channel6Start = micros();
+  } else {
+      channel6Cycle = micros() - channel6Start;
+  }
+}
+
+void processInterrupts(int &RC_CONTROL_MODE, bool &AUTO_ROLL, bool &AUTO_PITCH, bool &AUTO_THROTTLE, bool &AUTO_YAW, double yaw, double latitude, double longitude, double alt, int waypointCounter, double &targetAlt, double &targetIntAlt, double &ITermT, double &ITermR, double &ITermP, int &targetHeading, int &aileronInitial, int &elevatorInitial, double &targetLatitude, double &targetLongitude){
+   if (channel5Cycle < 1300){
+     if (RC_CONTROL_MODE != 1){
+       targetAlt = waypoint[waypointCounter + 2];
+       targetIntAlt = alt;
+       ITermT = channel3Cycle;
+       aileronInitial = channel1Cycle;
+       elevatorInitial = channel2Cycle;
+       targetHeading = int(TinyGPSPlus::courseTo(latitude,longitude,waypoint[waypointCounter],waypoint[waypointCounter + 1]));
+       if (targetHeading > 180){targetHeading -= 360;}
+     }
+     
+     RC_CONTROL_MODE = 1;
+     
+   } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
+     RC_CONTROL_MODE = 0;
+     
+   } else if (channel5Cycle > 1700){
+     if (RC_CONTROL_MODE != 2){
           targetAlt = alt;
           targetIntAlt = alt;
           ITermT = channel3Cycle;
           targetHeading = yaw;
           aileronInitial = channel1Cycle;
           elevatorInitial = channel2Cycle;
-          targetLatitude = gps.location.lat();
-          targetLongitude = gps.location.lng();
-        }
-        RC_CONTROL_MODE = 2;
+          ITermR = channel1Cycle;
+          ITermP = channel2Cycle;
+          latitude = gps.location.lat();
+          longitude = gps.location.lng();
+          targetLatitude = latitude;
+          targetLongitude = longitude;
       }
-        
-    }
-}
-
-void channel6Update(){
-  if (RC_CONTROL_MODE == 2 || RC_CONTROL_MODE == 1){
-    if (digitalRead(channel6) == 1){
-      channel6Start = micros();
-    } else {
-      channel6Cycle = micros() - channel6Start;
-      channel6Var = 2000.0 * (channel6Cycle - 1000);
-      if (channel6Var < 0.0) { channel6Var = 0.0;}
-    }
-    
+      
+      RC_CONTROL_MODE = 2;
+      
+      
+   }
+   
+   //------------------Mode Select------------------//
+   switchModes(RC_CONTROL_MODE, AUTO_ROLL, AUTO_PITCH, AUTO_THROTTLE, AUTO_YAW);
+   
+   //------------------Channel6Var------------------//
+   channel6Var = 2000.0 * (channel6Var - 1000);
+   if (channel6Var < 0.0) {channel6Var = 0.0;}
+   
+   //-------------------Channel 1-------------------//
+   if (!AUTO_ROLL){
+     Aileron.writeMicroseconds(channel1Cycle);
+   }
+   
+   //-------------------Channel 2-------------------//
+   if (!AUTO_PITCH){
+     Elevator.writeMicroseconds(channel2Cycle);
+   }
+   
+   //-------------------Channel 3-------------------//
+   if (!AUTO_THROTTLE){
+     Throttle.writeMicroseconds(channel3Cycle);
+   }
+   
+   //-------------------Channel 4-------------------//
+   if (!AUTO_YAW){
+     Rudder.writeMicroseconds(channel4Cycle);
+   }
+   
+ }
+ 
+ void switchModes(int RC_CONTROL_MODE, bool &AUTO_ROLL, bool &AUTO_PITCH, bool &AUTO_THROTTLE, bool &AUTO_YAW){
+   switch (RC_CONTROL_MODE){
+     case 0:
+       AUTO_ROLL = 0;
+       AUTO_PITCH = 0;
+       AUTO_THROTTLE = 0;
+       AUTO_YAW = 0;
+       break;
+       
+     case 1:
+       AUTO_ROLL = 0;
+       AUTO_PITCH = 0;
+       AUTO_THROTTLE = 1;
+       AUTO_YAW = 1;
+       break;
+       
+      case 2:
+       AUTO_ROLL = 1;
+       AUTO_PITCH = 1;
+       AUTO_THROTTLE = 1;
+       AUTO_YAW = 1;
+       break;
+   }
+ }
+ 
+ void checkBaro(double P, double T, double baseline, double alt, unsigned long baroClockOld){
+   if ((millis() - baroClockOld) >= BARO_DELAY){
+    updateBaro(P, T);
+    calcAlt(P, baseline, alt);
+    baroClockOld = millis();
   }
-}
-*/
+ }
+ 
+ void checkTemp(double T, unsigned long tempClockOld){
+   if ((millis() - tempClockOld) >= TEMP_DELAY){
+    updateTemp(T);
+    tempClockOld = millis();
+  }
+ }
+ 
+ void checkCompli(){
+   //Main Sensor Reading and Motor Control
+  if ((millis() - compliClockOld) >= COMPLI_DELAY){
+    compli(); //Complimentary Filter
+    calcYaw(); //Tilt Compensated Compass Code
+    //GPS Navigation Mode
+    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
+        yawUpdate(); // Yaw Control for navigation
+        //If GPS Locked, Enable Translation Mode
+        if (gps.satellites.value() > GPS_SATELLITE_MINIMUM){
+            FORWARD_MODE_ENABLE = 1;
+            STRAFE_MODE_ENABLE = 1;
+            translationUpdate(); //Roll + Pitch Control for navigation   
+        } else {
+          FORWARD_MODE_ENABLE = 0;
+          STRAFE_MODE_ENABLE = 0;
+        }
+    }
+    //Following statement may be deleted after tuning translation
+    if (RC_CONTROL_MODE == 1){
+      yawUpdate();
+      FORWARD_MODE_ENABLE = 0;
+      STRAFE_MODE_ENABLE = 0;
+    }
+  }
+ }
