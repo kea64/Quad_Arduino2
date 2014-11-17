@@ -525,10 +525,10 @@ void yawUpdate(){
 
 void translationUpdate(){
   //When Called, controls translation motion to navigate to waypoint
-  if (RC_CONTROL_MODE == 1){
-    targetLongitude = waypoint[waypointCounter + 1];
-    targetLatitude = waypoint[waypointCounter];
-  }
+//  if (RC_CONTROL_MODE == 1){
+//    targetLongitude = waypoint[waypointCounter + 1];
+//    targetLatitude = waypoint[waypointCounter];
+//  }
   
   errorLongitude = targetLongitude - gps.location.lng();
   errorLatitude = targetLatitude - gps.location.lat();
@@ -684,6 +684,8 @@ void channel5Update(){
           aileronInitial = channel1Cycle;
           elevatorInitial = channel2Cycle;
         }
+        targetLongitude = waypoint[waypointCounter + 1];
+        targetLatitude = waypoint[waypointCounter];
         RC_CONTROL_MODE = 1;
         
       } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700) {
