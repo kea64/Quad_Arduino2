@@ -1,20 +1,28 @@
+#define NO_PORTC_PINCHANGES
+#define NO_PORTB_PINCHANGES
+
 #include <Servo.h>
 #include <Wire.h>
-#include <ADXL345.h>
 #include <SFE_BMP180.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
-#include <compass.h>
+#include <Quad_HMC5883L.h>
+#include <Quad_ADXL345.h>
+#include <Quad_ITG3200.h>
 
-#define ITG3200_Address 0x68
 #define address 0x1E
+#define xMagError 0.94
+#define yMagError 0.99
+#define zMagError 0.94
+#define xMagOffset -90
+#define yMagOffset -85
+#define zMagOffset 225
 #define COMPLI_DELAY 5
 #define BARO_DELAY 20
 #define TEMP_DELAY 1000
 #define COMM_DELAY 250
 #define ELEV_DELAY 10
 #define LAND_DELAY 20000
-#define accConv 0.0039
 #define ACC_SCALAR 0.93
 #define FREE_FALL_THRESHOLD 8
 #define FREE_FALL_DURATION 20
@@ -64,12 +72,12 @@
 #define elevatorPin A2
 #define throttlePin A1
 #define rudderPin A0
-#define channel1 4
-#define channel2 5
-#define channel3 6
-#define channel4 7
-#define channel5 8
-#define channel6 9
+#define channel1 2
+#define channel2 3
+#define channel3 4
+#define channel4 5
+#define channel5 6
+#define channel6 7
 
 #define RC_ENABLE 1
 #define GPS_SATELLITE_MINIMUM 5
@@ -92,8 +100,10 @@ static const double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
                                                             };
 
 static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1;                                                           
-     
-ADXL345 adxl;
+  
+HMC5883L mag;     
+ADXL345 accel;
+ITG3200 gyro;
 TinyGPSPlus gps;
 SFE_BMP180 pressure;
 
@@ -101,24 +111,6 @@ Servo Throttle;
 Servo Rudder;
 Servo Elevator;
 Servo Aileron;
-
-struct gyroStruct{
-  double x;
-  double y;
-  double z;
-  int offX;
-  int offY;
-  int offZ;
-};
-
-struct accStruct{
-  double x;
-  double y;
-  double z;
-  int aX;
-  int aY;
-  int aZ;
-};
 
 struct modeRegStruct{
   int RC_CONTROL_MODE;
@@ -165,9 +157,9 @@ void setup(){
    Serial.begin(38400);
 
    //Peripheral Setup
-   initGyro();
-   initAcc();
-   initMag();
+   gyro.init();
+   accel.init();
+   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
    initServo();
    pressure.begin();
    
@@ -190,11 +182,13 @@ void setup(){
 
 
 void loop(){
-  gyroStruct gyro;
-  accStruct acc;
   modeRegStruct modeReg = {0,1,1,1,1};
   oriRegisterStruct oriRegister;
   targetRegisterStruct targetRegister = {1.0,1.0,0,0,0,0};
+  PIDStruct roll;
+  PIDStruct pitch;
+  PIDStruct yaw;
+  PIDStruct throttle;
   
   double cycle;
   double ITermT, ITermP, ITermR;
@@ -204,9 +198,9 @@ void loop(){
 
   int elevatorInitial, aileronInitial;
  
-  calibrateGyro(gyro);
+  gyro.calibrate();
   
-  initAngles(acc, oriRegister);
+  initAngles(accel, oriRegister);
   
   pressure.begin();
   updateTemp(T);
@@ -226,7 +220,7 @@ void loop(){
 //_______________________________________________________________________//
 
   while(1==1){
-    checkCompli(gyro, acc, oriRegister, compliClockOld);
+    checkCompli(gyro, accel, oriRegister, compliClockOld);
     
     checkBaro(P, T, baseline, baroClockOld, oriRegister);
     
@@ -238,77 +232,21 @@ void loop(){
     
     transmitData(oriRegister, gyro, commClockOld);
     
+    updateGPS(oriRegister.latitude,oriRegister.longitude);
+    
+    calcPID(roll,0,0,0,0,0);
+    calcPID(pitch,0,0,0,0,0);
+    calcPID(yaw,0,0,0,0,0);
+    calcPID(throttle,0,0,0,0,0);
   }
 }
 
 //----------------------------Functions----------------------------------//
 //_______________________________________________________________________//
 
-void initGyro() {
-   Wire.beginTransmission(ITG3200_Address); 
-   Wire.write(0x3E);  
-   Wire.write(0x00);   
-   Wire.endTransmission(); 
-   
-   Wire.beginTransmission(ITG3200_Address); 
-   Wire.write(0x15);  
-   Wire.write(0x07);   
-   Wire.endTransmission(); 
-   
-   Wire.beginTransmission(ITG3200_Address); 
-   Wire.write(0x16);  
-   Wire.write(0x1E);   // +/- 2000 dgrs/sec, 1KHz, 1E, 19
-   Wire.endTransmission(); 
-   
-   Wire.beginTransmission(ITG3200_Address); 
-   Wire.write(0x17);  
-   Wire.write(0x00);   
-   Wire.endTransmission();    
-}
 
-void initAcc(){
-  adxl.powerOn();
-  adxl.setFreeFallThreshold(FREE_FALL_THRESHOLD); //(5 - 9) recommended - 62.5mg per increment
-  adxl.setFreeFallDuration(FREE_FALL_DURATION); //(20 - 70) recommended - 5ms per increment
-  adxl.setInterruptMapping( ADXL345_INT_FREE_FALL_BIT,    ADXL345_INT1_PIN );
-  adxl.setInterrupt( ADXL345_INT_FREE_FALL_BIT,  1);
-}
-
-void initMag(){
-  compass_x_offset = -90;
-  compass_y_offset = -85;
-  compass_z_offset = 225;
-  compass_x_gainError = 0.94;
-  compass_y_gainError = 0.99;
-  compass_z_gainError = 0.94;
-  
-  compass_init(2);
-}
-
-void calibrateGyro(struct gyroStruct &gyro){
- int tmpx = 0;
- int tmpy = 0;
- int tmpz = 0;
- gyro.offX = 0;
- gyro.offY = 0;
- gyro.offZ = 0; 
-
- for (char i = 0;i<10;i++)
-    {
-    delay(10);  
-    updateGyro(gyro);
-    tmpx += gyro.x;
-    tmpy += gyro.y;
-    tmpz += gyro.z; 
-    }  
- gyro.offX = tmpx/10;
- gyro.offY = tmpy/10;
- gyro.offZ = tmpz/10;
- 
-}
-
-void initAngles(struct accStruct &acc, struct oriRegisterStruct &oriRegister){
-  updateAcc(acc); //Obtains Initial Angles; Quad must be motionless
+void initAngles(class ADXL345 &acc, struct oriRegisterStruct &oriRegister){
+  acc.readAcc(); //Obtains Initial Angles; Quad must be motionless
   oriRegister.roll = atan2(acc.y,acc.z)*(180/PI) + ROLL_OFFSET; //Accounts for Angle Differences
   oriRegister.pitch = atan2(-acc.x,acc.z)*(180/PI) + PITCH_OFFSET; 
 }
@@ -318,40 +256,6 @@ void initServo(){
   Elevator.attach(elevatorPin);
   Throttle.attach(throttlePin);
   Rudder.attach(rudderPin);
-}
-
-void updateGyro(struct gyroStruct &gyro) {
-  Wire.beginTransmission(ITG3200_Address); 
-  Wire.write(0x1B);       
-  Wire.endTransmission(); 
-  
-  Wire.beginTransmission(ITG3200_Address); 
-  Wire.requestFrom(ITG3200_Address, 8);    // request 8 bytes from ITG3200
-  
-  int i = 0;
-  byte buff[8];
-  while(Wire.available())    
-  { 
-    buff[i] = Wire.read(); 
-    i++;
-  }
-  Wire.endTransmission(); 
-    
-  gyro.x = ((buff[4] << 8) | buff[5]) - gyro.offX;
-  gyro.y = ((buff[2] << 8) | buff[3]) - gyro.offY;
-  gyro.z = ((buff[6] << 8) | buff[7]) - gyro.offZ;
-  
-}
-
-void updateAcc(struct accStruct &acc){
-  adxl.readAccel(&acc.aX, &acc.aY, &acc.aZ);
-  acc.x = acc.aX * accConv;
-  acc.y = acc.aY * accConv;
-  acc.z = acc.aZ * accConv;
-}
-
-void updateMag(){
-  compass_scalled_reading();
 }
 
 void updateBaro(double &P, double &T){
@@ -394,26 +298,29 @@ void updateGPS(double &latitude, double &longitude){
   }
 }
 
-void compli(struct gyroStruct &gyro, struct accStruct &acc, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
+void compli(class ITG3200 &gyro, class ADXL345 &accel, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
-  updateGyro(gyro);
-  updateAcc(acc);
+  gyro.update();
+  accel.readAcc();
   
   double cycle = (((millis() - compliClockOld)*1.0)/1000.0);
   
-  double pitchAccel = atan2(-acc.x,acc.z)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
+  double pitchAccel = atan2(-accel.x,accel.z)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
   oriRegister.pitch = compliAlpha * (oriRegister.pitch + ((gyro.x)/14.375) * cycle) + (1 - compliAlpha) * pitchAccel;
   
-  double rollAccel = atan2(acc.y,acc.z)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
+  double rollAccel = atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
   oriRegister.roll = compliAlpha * (oriRegister.roll + ((gyro.y)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
   
   compliClockOld = millis();
 }
 
 void calcYaw(struct oriRegisterStruct &oriRegister){
-  updateMag();
-  double CMx = compass_x_scalled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
-  double CMy = compass_x_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  mag.readMag();
+  //double CMx = compass_x_scalled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
+  //double CMy = compass_x_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  double CMx = mag.xScaled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + mag.zScaled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
+  double CMy = mag.xScaled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + mag.yScaled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - mag.zScaled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  
   oriRegister.yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
   if (oriRegister.yaw < 0){oriRegister.yaw += 2*PI;}
   if (oriRegister.yaw > 2*PI) {oriRegister.yaw -= 2*PI;}
@@ -438,6 +345,59 @@ int calcPID(struct PIDStruct &motion, double target, double currPos, const doubl
   if (motion.control < motion.minimum) {motion.control = motion.minimum;}
   motion.lastPos = currPos;
   int controlOut = int(motion.control);
+  
+  motion.clockOld = millis();
+  
+  return(controlOut);
+}
+
+int calcPID2(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
+  
+  int error = target - currPos;
+  motion.iTerm += (ki * 0.001 * int(millis() - motion.clockOld) * error);
+  if (motion.iTerm > motion.maximum){motion.iTerm = motion.maximum;}
+  else if (motion.iTerm < motion.minimum){motion.iTerm = motion.minimum;}
+  motion.control = kp * error + motion.iTerm - ((kd * (currPos - motion.lastPos))/(0.001 * (millis() - motion.clockOld)));
+  if (motion.control > motion.maximum) {motion.control = motion.maximum;}
+  if (motion.control < motion.minimum) {motion.control = motion.minimum;}
+  motion.lastPos = currPos;
+  int controlOut = int(motion.control);
+  
+  motion.clockOld = millis();
+  
+  return(controlOut);
+}
+
+int calcPID3(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
+  
+  int error = target - currPos;
+  motion.iTerm += (ki * 0.001 * int(millis() - motion.clockOld) * error);
+  if (motion.iTerm > motion.maximum){motion.iTerm = motion.maximum;}
+  else if (motion.iTerm < motion.minimum){motion.iTerm = motion.minimum;}
+  motion.control = kp * error + motion.iTerm - ((kd * (currPos - motion.lastPos))/(0.001 * (millis() - motion.clockOld)));
+  if (motion.control > motion.maximum) {motion.control = motion.maximum;}
+  if (motion.control < motion.minimum) {motion.control = motion.minimum;}
+  motion.lastPos = currPos;
+  int controlOut = int(motion.control);
+  
+  motion.clockOld = millis();
+  
+  return(controlOut);
+}
+
+int calcPID4(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
+  
+  int error = target - currPos;
+  motion.iTerm += (ki * 0.001 * int(millis() - motion.clockOld) * error);
+  if (motion.iTerm > motion.maximum){motion.iTerm = motion.maximum;}
+  else if (motion.iTerm < motion.minimum){motion.iTerm = motion.minimum;}
+  motion.control = kp * error + motion.iTerm - ((kd * (currPos - motion.lastPos))/(0.001 * (millis() - motion.clockOld)));
+  if (motion.control > motion.maximum) {motion.control = motion.maximum;}
+  if (motion.control < motion.minimum) {motion.control = motion.minimum;}
+  motion.lastPos = currPos;
+  int controlOut = int(motion.control);
+  
+  motion.clockOld = millis();
   
   return(controlOut);
 }
@@ -607,10 +567,10 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
   }
  }
  
- void checkCompli(struct gyroStruct &gyro, struct accStruct &acc, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
+ void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
-    compli(gyro, acc, oriRegister, compliClockOld); //Complimentary Filter
+    compli(gyro, accel, oriRegister, compliClockOld); //Complimentary Filter
     calcYaw(oriRegister); //Tilt Compensated Compass Code
     //GPS Navigation Mode
 //    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
@@ -634,7 +594,7 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
   }
  }
  
- void transmitData(struct oriRegisterStruct oriRegister, struct gyroStruct gyro, unsigned long &commClockOld){
+ void transmitData(struct oriRegisterStruct oriRegister, class ITG3200 gyro, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      Serial.print("Roll: ");
      Serial.println(oriRegister.roll);
@@ -648,3 +608,4 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
      commClockOld = millis();
    }
  }
+ 
