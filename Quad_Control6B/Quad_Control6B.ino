@@ -3,12 +3,12 @@
 
 #include <Servo.h>
 #include <Wire.h>
-#include <SFE_BMP180.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
 #include <Quad_HMC5883L.h>
 #include <Quad_ADXL345.h>
 #include <Quad_ITG3200.h>
+#include <Quad_BMP180.h>
 
 #define address 0x1E
 #define xMagError 0.94
@@ -104,8 +104,8 @@ static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1;
 HMC5883L mag;     
 ADXL345 accel;
 ITG3200 gyro;
+BMP180 baro;
 TinyGPSPlus gps;
-SFE_BMP180 pressure;
 
 Servo Throttle;
 Servo Rudder;
@@ -161,7 +161,7 @@ void setup(){
    accel.init();
    mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
    initServo();
-   pressure.begin();
+   baro.begin(BARO_MODE, altAlpha);
    
    pinMode(13,OUTPUT); //GPS Lock Indicator
    digitalWrite(13,LOW);
@@ -192,7 +192,6 @@ void loop(){
   
   double cycle;
   double ITermT, ITermP, ITermR;
-  double baseline, T, P, p0, a;
   
   unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, elevClockOld, landClockOld;
 
@@ -201,12 +200,7 @@ void loop(){
   gyro.calibrate();
   
   initAngles(accel, oriRegister);
-  
-  pressure.begin();
-  updateTemp(T);
-  updateBaro(P, T);
-  baseline = P;
-  
+ 
   //Reset State Control Timers
   compliClockOld = millis();
   baroClockOld = millis();
@@ -222,15 +216,15 @@ void loop(){
   while(1==1){
     checkCompli(gyro, accel, oriRegister, compliClockOld);
     
-    checkBaro(P, T, baseline, baroClockOld, oriRegister);
+    checkBaro(baro, baroClockOld, oriRegister);
     
-    checkTemp(T, tempClockOld);
+    checkTemp(baro, tempClockOld);
     
     processInterrupts(modeReg, oriRegister, targetRegister, ITermT, ITermR, ITermP, aileronInitial, elevatorInitial);
     
     checkDistance(targetRegister, oriRegister);
     
-    transmitData(oriRegister, gyro, commClockOld);
+    transmitData(oriRegister, gyro, baro, commClockOld);
     
     updateGPS(oriRegister.latitude,oriRegister.longitude);
     
@@ -246,7 +240,7 @@ void loop(){
 
 
 void initAngles(class ADXL345 &acc, struct oriRegisterStruct &oriRegister){
-  acc.readAcc(); //Obtains Initial Angles; Quad must be motionless
+  acc.update(); //Obtains Initial Angles; Quad must be motionless
   oriRegister.roll = atan2(acc.y,acc.z)*(180/PI) + ROLL_OFFSET; //Accounts for Angle Differences
   oriRegister.pitch = atan2(-acc.x,acc.z)*(180/PI) + PITCH_OFFSET; 
 }
@@ -256,23 +250,6 @@ void initServo(){
   Elevator.attach(elevatorPin);
   Throttle.attach(throttlePin);
   Rudder.attach(rudderPin);
-}
-
-void updateBaro(double &P, double &T){
-  char status = pressure.startPressure(BARO_MODE);
-  if (status != 0){
-    delay(status);
-    status = pressure.getPressure(P,T);
-  }      
-}
-
-void updateTemp(double &T){
-  char status = pressure.startTemperature();
-  if (status != 0)
-  {
-    delay(status);
-    status = pressure.getTemperature(T);
-  }
 }
 
 void updateGPS(double &latitude, double &longitude){
@@ -301,7 +278,7 @@ void updateGPS(double &latitude, double &longitude){
 void compli(class ITG3200 &gyro, class ADXL345 &accel, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
   gyro.update();
-  accel.readAcc();
+  accel.update();
   
   double cycle = (((millis() - compliClockOld)*1.0)/1000.0);
   
@@ -315,7 +292,7 @@ void compli(class ITG3200 &gyro, class ADXL345 &accel, struct oriRegisterStruct 
 }
 
 void calcYaw(struct oriRegisterStruct &oriRegister){
-  mag.readMag();
+  mag.update();
   //double CMx = compass_x_scalled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
   //double CMy = compass_x_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
   double CMx = mag.xScaled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + mag.zScaled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
@@ -326,12 +303,6 @@ void calcYaw(struct oriRegisterStruct &oriRegister){
   if (oriRegister.yaw > 2*PI) {oriRegister.yaw -= 2*PI;}
   oriRegister.yaw = oriRegister.yaw * (180/PI);
   if (oriRegister.yaw <= 360 && oriRegister.yaw > 180) {oriRegister.yaw -= 360;}
-}
-
-void calcAlt(double P, double baseline, double &alt){
-  double a = pressure.altitude(P,baseline);
-  
-  alt = altAlpha * alt + (1-altAlpha) * a; //Heavy Barometer Filtering
 }
 
 int calcPID(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
@@ -552,17 +523,17 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
    }
  }
  
- void checkBaro(double &P, double &T, double &baseline, unsigned long &baroClockOld, struct oriRegisterStruct &oriRegister){
+ void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct oriRegisterStruct &oriRegister){
    if ((millis() - baroClockOld) >= BARO_DELAY){
-    updateBaro(P, T);
-    calcAlt(P, baseline, oriRegister.alt);
+    baro.updatePressure();
+    baro.calculateAltitude();
     baroClockOld = millis();
   }
  }
  
- void checkTemp(double &T, unsigned long &tempClockOld){
+ void checkTemp(class BMP180 &baro, unsigned long &tempClockOld){
    if ((millis() - tempClockOld) >= TEMP_DELAY){
-    updateTemp(T);
+    baro.updateTemperature();
     tempClockOld = millis();
   }
  }
@@ -594,7 +565,7 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
   }
  }
  
- void transmitData(struct oriRegisterStruct oriRegister, class ITG3200 gyro, unsigned long &commClockOld){
+ void transmitData(struct oriRegisterStruct oriRegister, class ITG3200 gyro, class BMP180 baro, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      Serial.print("Roll: ");
      Serial.println(oriRegister.roll);
@@ -603,7 +574,7 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
      Serial.print("Yaw: ");
      Serial.println(oriRegister.yaw);
      Serial.print("Alt: ");
-     Serial.println(oriRegister.alt);
+     Serial.println(baro.alt);
    
      commClockOld = millis();
    }
