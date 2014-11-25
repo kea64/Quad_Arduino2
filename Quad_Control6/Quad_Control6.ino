@@ -49,6 +49,9 @@ O - (CH5 Down) Manual Mode
 
 */
 
+#define NO_PORTC_PINCHANGES
+#define NO_PORTB_PINCHANGES
+
 #include <Servo.h>
 #include <Wire.h>
 #include <ADXL345.h>
@@ -83,14 +86,14 @@ volatile int channel5Cycle;
 volatile int channel6Cycle;
 
 double baseline;
-double T,P,p0,a;
-double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,CMy,CMx,pitchAccel,rollAccel,targetLongitude,targetLatitude;
+double T,P,p0;
+double GyroX,GyroY,GyroZ,cycle,pitch,roll,yaw,accX,accY,accZ,pitchAccel,rollAccel,targetLongitude,targetLatitude;
 double alt = 0.0;
 double lastAlt = 0.0;
 double targetAlt = 1.0;
 double targetIntAlt = 1.0;
 double ITermP,ITermR,ITermY,ITermT,lastYaw;
-double errorYaw,throttleControl,errorThrottle,errorLongitude,errorLatitude,errorRoll,errorPitch;
+double throttleControl;
 double channel6Var = 0.0;
 
 double yawPIDVar[] = {0.0,0.0,0.0};
@@ -111,7 +114,7 @@ boolean STRAFE_MODE_ENABLE = 0;
 
 char status;
 
-unsigned long compliClockNew,compliClockOld,baroClockOld,tempClockOld,commClockOld,elevClockOld,landClockOld,channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
+unsigned long compliClockOld,baroClockOld,tempClockOld,commClockOld,elevClockOld,landClockOld,channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
 ADXL345 adxl;
 TinyGPSPlus gps;
@@ -172,12 +175,12 @@ SFE_BMP180 pressure;
 #define elevatorPin A2
 #define throttlePin A1
 #define rudderPin A0
-#define channel1 4
-#define channel2 5
-#define channel3 6
-#define channel4 7
-#define channel5 8
-#define channel6 9
+#define channel1 2
+#define channel2 3
+#define channel3 4
+#define channel4 5
+#define channel5 6
+#define channel6 7
 
 #define RC_ENABLE 1
 #define GPS_SATELLITE_MINIMUM 5
@@ -318,14 +321,6 @@ void loop() {
     Serial.println(aileronControl);
     Serial.print("Pitch: ");
     Serial.println(elevatorControl);
-    Serial.print("Err Roll: ");
-    Serial.println(errorRoll,6);
-    Serial.print("Err Pitch: ");
-    Serial.println(errorPitch,6);
-    Serial.print("Err Latitude: ");
-    Serial.println(errorLatitude,6);
-    Serial.print("Err Longitude: ");
-    Serial.println(errorLongitude,6);
     
     commClockOld = millis();
   }
@@ -476,8 +471,7 @@ void getGPS(){
 
 void compli(){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
-  compliClockNew = millis(); //Cycle Timing Code
-  cycle = (((compliClockNew - compliClockOld)*1.0)/1000.0);
+  cycle = (((millis() - compliClockOld)*1.0)/1000.0);
   getGyro();
   getAcc();
   
@@ -492,8 +486,8 @@ void compli(){
 
 void calcYaw(){
   getMag();
-  CMx = compass_x_scalled * cos(radians(pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(pitch-PITCH_OFFSET)); //Adjusts mX reading
-  CMy = compass_x_scalled * sin(radians(roll-ROLL_OFFSET)) * sin(radians(pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(roll-ROLL_OFFSET)) * cos(radians(pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  double CMx = compass_x_scalled * cos(radians(pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(pitch-PITCH_OFFSET)); //Adjusts mX reading
+  double CMy = compass_x_scalled * sin(radians(roll-ROLL_OFFSET)) * sin(radians(pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(roll-ROLL_OFFSET)) * cos(radians(pitch-PITCH_OFFSET)); //Adjusts mY Reading
   yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
   if (yaw < 0){yaw += 2*PI;}
   if (yaw > 2*PI) {yaw -= 2*PI;}
@@ -502,14 +496,14 @@ void calcYaw(){
 }
 
 void calcAlt(){
-  a = pressure.altitude(P,baseline);
+  double a = pressure.altitude(P,baseline);
   
   alt = altAlpha * alt + (1-altAlpha) * a; //Heavy Barometer Filtering
 }
 
 void yawUpdate(){
     //Yaw PID
-    errorYaw = yaw - targetHeading;
+    double errorYaw = yaw - targetHeading;
     if (errorYaw <= -180){errorYaw += 360;}
     if (errorYaw > 180){errorYaw -= 360;}
     ITermY += (kiy * cycle * errorYaw);
@@ -530,11 +524,11 @@ void translationUpdate(){
 //    targetLatitude = waypoint[waypointCounter];
 //  }
   
-  errorLongitude = targetLongitude - gps.location.lng();
-  errorLatitude = targetLatitude - gps.location.lat();
+  double errorLongitude = targetLongitude - gps.location.lng();
+  double errorLatitude = targetLatitude - gps.location.lat();
   
-  errorRoll = (errorLongitude * cos(radians(yaw)) + errorLatitude * sin(radians(yaw)));
-  errorPitch = -(errorLatitude * cos(radians(yaw)) + errorLongitude * sin(radians(yaw)));
+  double errorRoll = (errorLongitude * cos(radians(yaw)) + errorLatitude * sin(radians(yaw)));
+  double errorPitch = -(errorLatitude * cos(radians(yaw)) + errorLongitude * sin(radians(yaw)));
   
   //Strafe Motion
   ITermR += (kir * cycle * errorRoll);
@@ -565,7 +559,7 @@ void elevPID(){
         if (targetIntAlt < targetAlt){targetIntAlt += 0.03;}
         if (targetIntAlt > targetAlt){targetIntAlt -= 0.03;}
         
-        errorThrottle = targetIntAlt - alt;
+        double errorThrottle = targetIntAlt - alt;
         ITermT += (kit * 0.001 * int(millis() - elevClockOld) * errorThrottle);
         if (ITermT > MAX_THROTTLE) {ITermT = MAX_THROTTLE;}
         else if (ITermT < MIN_THROTTLE) {ITermT = MIN_THROTTLE;}

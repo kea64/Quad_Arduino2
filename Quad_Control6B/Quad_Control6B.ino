@@ -9,6 +9,7 @@
 #include <Quad_ADXL345.h>
 #include <Quad_ITG3200.h>
 #include <Quad_BMP180.h>
+#include <Quad_Registers.h>
 
 #define address 0x1E
 #define xMagError 0.94
@@ -322,57 +323,6 @@ int calcPID(struct PIDStruct &motion, double target, double currPos, const doubl
   return(controlOut);
 }
 
-int calcPID2(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
-  
-  int error = target - currPos;
-  motion.iTerm += (ki * 0.001 * int(millis() - motion.clockOld) * error);
-  if (motion.iTerm > motion.maximum){motion.iTerm = motion.maximum;}
-  else if (motion.iTerm < motion.minimum){motion.iTerm = motion.minimum;}
-  motion.control = kp * error + motion.iTerm - ((kd * (currPos - motion.lastPos))/(0.001 * (millis() - motion.clockOld)));
-  if (motion.control > motion.maximum) {motion.control = motion.maximum;}
-  if (motion.control < motion.minimum) {motion.control = motion.minimum;}
-  motion.lastPos = currPos;
-  int controlOut = int(motion.control);
-  
-  motion.clockOld = millis();
-  
-  return(controlOut);
-}
-
-int calcPID3(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
-  
-  int error = target - currPos;
-  motion.iTerm += (ki * 0.001 * int(millis() - motion.clockOld) * error);
-  if (motion.iTerm > motion.maximum){motion.iTerm = motion.maximum;}
-  else if (motion.iTerm < motion.minimum){motion.iTerm = motion.minimum;}
-  motion.control = kp * error + motion.iTerm - ((kd * (currPos - motion.lastPos))/(0.001 * (millis() - motion.clockOld)));
-  if (motion.control > motion.maximum) {motion.control = motion.maximum;}
-  if (motion.control < motion.minimum) {motion.control = motion.minimum;}
-  motion.lastPos = currPos;
-  int controlOut = int(motion.control);
-  
-  motion.clockOld = millis();
-  
-  return(controlOut);
-}
-
-int calcPID4(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
-  
-  int error = target - currPos;
-  motion.iTerm += (ki * 0.001 * int(millis() - motion.clockOld) * error);
-  if (motion.iTerm > motion.maximum){motion.iTerm = motion.maximum;}
-  else if (motion.iTerm < motion.minimum){motion.iTerm = motion.minimum;}
-  motion.control = kp * error + motion.iTerm - ((kd * (currPos - motion.lastPos))/(0.001 * (millis() - motion.clockOld)));
-  if (motion.control > motion.maximum) {motion.control = motion.maximum;}
-  if (motion.control < motion.minimum) {motion.control = motion.minimum;}
-  motion.lastPos = currPos;
-  int controlOut = int(motion.control);
-  
-  motion.clockOld = millis();
-  
-  return(controlOut);
-}
-
 void checkDistance(struct targetRegisterStruct &targetRegister, struct oriRegisterStruct oriRegister){
   //Monitors Distance to Waypoints and updates them when the quad arrives
   int distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[targetRegister.waypointCounter],waypoint[targetRegister.waypointCounter + 1]));
@@ -496,7 +446,7 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
      Rudder.writeMicroseconds(channel4Cycle);
    }
    
- }
+}
  
  void switchModes(struct modeRegStruct &modeReg){
    switch (modeReg.RC_CONTROL_MODE){
