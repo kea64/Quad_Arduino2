@@ -21,6 +21,9 @@
 #define PITCH_OFFSET 0 //Positive Lowers Aft 2
 #define YAW_OFFSET 0
 #define ACC_SCALAR 0.93
+#define ARM_ENGAGE_THRESHOLD 1700
+#define ARM_DISENGAGE_THRESHOLD 1100
+#define ARM_THROTTLE_THRESHOLD 1100
 
 #define altAlpha 0.9
 #define compliAlpha 0.98
@@ -32,6 +35,34 @@
 #define COMM_DELAY 250
 #define ELEV_DELAY 10
 #define LAND_DELAY 20000
+
+#define arm1Pin A3
+#define arm2Pin A2
+#define arm3Pin A0
+#define throttlePin A1
+#define channel1 2
+#define channel2 3
+#define channel3 4
+#define channel4 5
+#define channel5 6
+#define channel6 7
+
+volatile int channel1Cycle;
+volatile int channel2Cycle;
+volatile int channel3Cycle;
+volatile int channel4Cycle;
+volatile int channel5Cycle;
+volatile int channel6Cycle;
+
+unsigned long channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
+
+double channel6Var;
+
+Servo Arm1;
+Servo Arm2;
+Servo Arm3;
+Servo Throttle;
+
 
 HMC5883L mag;     
 ADXL345 accel;
@@ -45,6 +76,21 @@ void setup(){
   Wire.begin();
   Serial.begin(38400);
   
+  pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Interrupt,CHANGE);
+  pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Interrupt,CHANGE);
+  pinMode(channel3,INPUT);digitalWrite(channel3,HIGH);PCintPort::attachInterrupt(channel3,&channel3Interrupt,CHANGE);
+  pinMode(channel4,INPUT);digitalWrite(channel4,HIGH);PCintPort::attachInterrupt(channel4,&channel4Interrupt,CHANGE);
+  pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Interrupt,CHANGE);
+  pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Interrupt,CHANGE);
+  
+  Arm1.attach(arm1Pin);
+  Arm2.attach(arm2Pin);
+  Arm3.attach(arm3Pin);
+  Throttle.attach(throttlePin);
+  
+  pinMode(13,OUTPUT); //Arming Indicator
+  digitalWrite(13,LOW);
+   
   gyro.init();
   accel.init();
   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
@@ -62,7 +108,9 @@ void loop(){
   double ITermT, ITermP, ITermR;
   
   unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, elevClockOld, landClockOld;
-
+  
+  bool MOTOR_ENABLE = 0;
+  
   gyro.calibrate();
   
   orient.initAngles(accel, ROLL_OFFSET, PITCH_OFFSET);
@@ -80,13 +128,21 @@ void loop(){
 //_______________________________________________________________________//
 
   while(1==1){
-    checkCompli(gyro, accel, orient, compliClockOld);
+    if (MOTOR_ENABLE == 1){
+      checkCompli(gyro, accel, orient, compliClockOld);
     
-    checkBaro(baro, baroClockOld, orient);
+      checkBaro(baro, baroClockOld, orient);
     
-    checkTemp(baro, tempClockOld);
+      checkTemp(baro, tempClockOld);
     
-    transmitData(orient, baro, commClockOld);
+      transmitData(orient, baro, commClockOld);
+      
+    } else {
+      Throttle.write(0);
+    }
+    
+    checkArming(MOTOR_ENABLE);
+    
   }
   
 }
@@ -177,3 +233,62 @@ void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, class ORIENTATIO
      commClockOld = millis();
    }
  }
+ 
+ void channel1Interrupt(){
+  if (digitalRead(channel1) == 1){
+      channel1Start = micros();
+  } else {
+      channel1Cycle = micros() - channel1Start;
+  }
+}
+
+void channel2Interrupt(){
+  if (digitalRead(channel2) == 1){
+      channel2Start = micros();
+  } else {
+      channel2Cycle = micros() - channel2Start;
+  }
+}
+
+void channel3Interrupt(){
+  if (digitalRead(channel3) == 1){
+      channel3Start = micros();
+  } else {
+      channel3Cycle = micros() - channel3Start;
+  }
+}
+
+void channel4Interrupt(){
+  if (digitalRead(channel4) == 1){
+      channel4Start = micros();
+  } else {
+      channel4Cycle = micros() - channel4Start;
+  }
+}
+
+void channel5Interrupt(){
+  if (digitalRead(channel5) == 1){
+      channel5Start = micros();
+  } else {
+      channel5Cycle = micros() - channel5Start;
+  }
+}
+
+void channel6Interrupt(){
+  if (digitalRead(channel6) == 1){
+      channel6Start = micros();
+  } else {
+      channel6Cycle = micros() - channel6Start;
+  }
+}
+
+void checkArming(bool &MOTOR_ENABLE){
+  if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle >= ARM_ENGAGE_THRESHOLD){
+      MOTOR_ENABLE = 1;
+      digitalWrite(13,HIGH);
+      
+  } else if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_DISENGAGE_THRESHOLD){
+      MOTOR_ENABLE = 0;
+      digitalWrite(13,LOW);
+  }
+}
