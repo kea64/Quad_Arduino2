@@ -5,11 +5,11 @@
 #include <Wire.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
-#include <Quad_HMC5883L.h>
-#include <Quad_ADXL345.h>
-#include <Quad_L3D4200D.h>
-#include <Quad_BMP180.h>
-#include <Quad_Registers.h>
+#include <H2_HMC5883L.h>
+#include <H2_ADXL345.h>
+#include <H2_L3D4200D.h>
+#include <H2_BMP180.h>
+#include <H2_Registers.h>
 
 #define xMagError 0.96
 #define yMagError 1.01

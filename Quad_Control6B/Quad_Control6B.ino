@@ -1,15 +1,15 @@
-#define NO_PORTC_PINCHANGES
-#define NO_PORTB_PINCHANGES
+//#define NO_PORTC_PINCHANGES
+//#define NO_PORTB_PINCHANGES
 
 #include <Servo.h>
 #include <Wire.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
-#include <Quad_HMC5883L.h>
-#include <Quad_ADXL345.h>
-#include <Quad_ITG3200.h>
-#include <Quad_BMP180.h>
-#include <Quad_Registers.h>
+#include <H2_HMC5883L.h>
+#include <H2_ADXL345.h>
+#include <H2_ITG3200.h>
+#include <H2_BMP180.h>
+#include <H2_Registers.h>
 
 #define address 0x1E
 #define xMagError 0.94
@@ -107,28 +107,13 @@ ADXL345 accel;
 ITG3200 gyro;
 BMP180 baro;
 TinyGPSPlus gps;
+MODE_REGISTER mode;
+ORIENTATION_REGISTER orient;
 
 Servo Throttle;
 Servo Rudder;
 Servo Elevator;
 Servo Aileron;
-
-struct modeRegStruct{
-  int RC_CONTROL_MODE;
-  bool CH1_ENABLE;
-  bool CH2_ENABLE;
-  bool CH3_ENABLE;
-  bool CH4_ENABLE;
-};
-
-struct oriRegisterStruct{
-  double roll;
-  double pitch;
-  double yaw;
-  double alt;
-  double latitude;
-  double longitude;
-};
 
 struct targetRegisterStruct{
   double alt;
@@ -161,8 +146,13 @@ void setup(){
    gyro.init();
    accel.init();
    mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
-   initServo();
    baro.begin(BARO_MODE, altAlpha);
+   mode.init(0);
+   
+   Aileron.attach(aileronPin);
+   Elevator.attach(elevatorPin);
+   Throttle.attach(throttlePin);
+   Rudder.attach(rudderPin);
    
    pinMode(13,OUTPUT); //GPS Lock Indicator
    digitalWrite(13,LOW);
@@ -183,8 +173,6 @@ void setup(){
 
 
 void loop(){
-  modeRegStruct modeReg = {0,1,1,1,1};
-  oriRegisterStruct oriRegister;
   targetRegisterStruct targetRegister = {1.0,1.0,0,0,0,0};
   PIDStruct roll;
   PIDStruct pitch;
@@ -200,7 +188,7 @@ void loop(){
  
   gyro.calibrate();
   
-  initAngles(accel, oriRegister);
+  orient.initAngles(accel, ROLL_OFFSET, PITCH_OFFSET);
  
   //Reset State Control Timers
   compliClockOld = millis();
@@ -215,19 +203,19 @@ void loop(){
 //_______________________________________________________________________//
 
   while(1==1){
-    checkCompli(gyro, accel, oriRegister, compliClockOld);
+    checkCompli(gyro, accel, orient, compliClockOld);
     
-    checkBaro(baro, baroClockOld, oriRegister);
+    checkBaro(baro, baroClockOld, orient);
     
     checkTemp(baro, tempClockOld);
     
-    processInterrupts(modeReg, oriRegister, targetRegister, ITermT, ITermR, ITermP, aileronInitial, elevatorInitial);
+    processInterrupts(mode, orient, targetRegister, ITermT, ITermR, ITermP, aileronInitial, elevatorInitial);
     
-    checkDistance(targetRegister, oriRegister);
+    checkDistance(targetRegister, orient);
     
-    transmitData(oriRegister, gyro, baro, commClockOld);
+    transmitData(orient, gyro, baro, commClockOld);
     
-    updateGPS(oriRegister.latitude,oriRegister.longitude);
+    updateGPS(orient.latitude,orient.longitude);
     
     calcPID(roll,0,0,0,0,0);
     calcPID(pitch,0,0,0,0,0);
@@ -239,19 +227,6 @@ void loop(){
 //----------------------------Functions----------------------------------//
 //_______________________________________________________________________//
 
-
-void initAngles(class ADXL345 &acc, struct oriRegisterStruct &oriRegister){
-  acc.update(); //Obtains Initial Angles; Quad must be motionless
-  oriRegister.roll = atan2(acc.y,acc.z)*(180/PI) + ROLL_OFFSET; //Accounts for Angle Differences
-  oriRegister.pitch = atan2(-acc.x,acc.z)*(180/PI) + PITCH_OFFSET; 
-}
-
-void initServo(){
-  Aileron.attach(aileronPin);
-  Elevator.attach(elevatorPin);
-  Throttle.attach(throttlePin);
-  Rudder.attach(rudderPin);
-}
 
 void updateGPS(double &latitude, double &longitude){
   while (Serial.available() > 0){
@@ -276,7 +251,7 @@ void updateGPS(double &latitude, double &longitude){
   }
 }
 
-void compli(class ITG3200 &gyro, class ADXL345 &accel, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
+void compli(class ITG3200 &gyro, class ADXL345 &accel, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
   gyro.update();
   accel.update();
@@ -284,26 +259,26 @@ void compli(class ITG3200 &gyro, class ADXL345 &accel, struct oriRegisterStruct 
   double cycle = (((millis() - compliClockOld)*1.0)/1000.0);
   
   double pitchAccel = atan2(-accel.x,accel.z)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
-  oriRegister.pitch = compliAlpha * (oriRegister.pitch + ((gyro.x)/14.375) * cycle) + (1 - compliAlpha) * pitchAccel;
+  orient.pitch = compliAlpha * (orient.pitch + ((gyro.x)/14.375) * cycle) + (1 - compliAlpha) * pitchAccel;
   
   double rollAccel = atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
-  oriRegister.roll = compliAlpha * (oriRegister.roll + ((gyro.y)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
+  orient.roll = compliAlpha * (orient.roll + ((gyro.y)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
   
   compliClockOld = millis();
 }
 
-void calcYaw(struct oriRegisterStruct &oriRegister){
+void calcYaw(class ORIENTATION_REGISTER &orient){
   mag.update();
   //double CMx = compass_x_scalled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
   //double CMy = compass_x_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
-  double CMx = mag.xScaled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + mag.zScaled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
-  double CMy = mag.xScaled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + mag.yScaled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - mag.zScaled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
+  double CMx = mag.xScaled * cos(radians(orient.pitch-PITCH_OFFSET)) + mag.zScaled * sin(radians(orient.pitch-PITCH_OFFSET)); //Adjusts mX reading
+  double CMy = mag.xScaled * sin(radians(orient.roll-ROLL_OFFSET)) * sin(radians(orient.pitch-PITCH_OFFSET)) + mag.yScaled * cos(radians(orient.roll-ROLL_OFFSET)) - mag.zScaled * sin(radians(orient.roll-ROLL_OFFSET)) * cos(radians(orient.pitch-PITCH_OFFSET)); //Adjusts mY Reading
   
-  oriRegister.yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
-  if (oriRegister.yaw < 0){oriRegister.yaw += 2*PI;}
-  if (oriRegister.yaw > 2*PI) {oriRegister.yaw -= 2*PI;}
-  oriRegister.yaw = oriRegister.yaw * (180/PI);
-  if (oriRegister.yaw <= 360 && oriRegister.yaw > 180) {oriRegister.yaw -= 360;}
+  orient.yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
+  if (orient.yaw < 0){orient.yaw += 2*PI;}
+  if (orient.yaw > 2*PI) {orient.yaw -= 2*PI;}
+  orient.yaw = orient.yaw * (180/PI);
+  if (orient.yaw <= 360 && orient.yaw > 180) {orient.yaw -= 360;}
 }
 
 int calcPID(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
@@ -323,12 +298,12 @@ int calcPID(struct PIDStruct &motion, double target, double currPos, const doubl
   return(controlOut);
 }
 
-void checkDistance(struct targetRegisterStruct &targetRegister, struct oriRegisterStruct oriRegister){
+void checkDistance(struct targetRegisterStruct &targetRegister, class ORIENTATION_REGISTER &orient){
   //Monitors Distance to Waypoints and updates them when the quad arrives
   int distanceToWaypoint = int(TinyGPSPlus::distanceBetween(gps.location.lat(),gps.location.lng(),waypoint[targetRegister.waypointCounter],waypoint[targetRegister.waypointCounter + 1]));
   if(distanceToWaypoint <= 3){
     targetRegister.waypointCounter += 3;
-    if ((targetRegister.waypointCounter/3) > numWaypoint && (abs(targetRegister.alt - oriRegister.alt)) < 2){
+    if ((targetRegister.waypointCounter/3) > numWaypoint && (abs(targetRegister.alt - orient.alt)) < 2){
      targetRegister.waypointCounter = 0; 
      //Land Code Here Perhaps
     }
@@ -383,97 +358,72 @@ void channel6Interrupt(){
   }
 }
 
-void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &oriRegister, struct targetRegisterStruct &targetRegister, double &ITermT, double &ITermR, double &ITermP, int &aileronInitial, int &elevatorInitial){
+void processInterrupts(class MODE_REGISTER mode, class ORIENTATION_REGISTER &orient, struct targetRegisterStruct &targetRegister, double &ITermT, double &ITermR, double &ITermP, int &aileronInitial, int &elevatorInitial){
    if (channel5Cycle < 1300){
-     if (modeReg.RC_CONTROL_MODE != 1){
+     if (mode.RC_CONTROL_MODE != 1){
        targetRegister.alt = waypoint[targetRegister.waypointCounter + 2];
-       targetRegister.intAlt = oriRegister.alt;
+       targetRegister.intAlt = orient.alt;
        ITermT = channel3Cycle;
        aileronInitial = channel1Cycle;
        elevatorInitial = channel2Cycle;
-       targetRegister.heading = int(TinyGPSPlus::courseTo(oriRegister.latitude,oriRegister.longitude,waypoint[targetRegister.waypointCounter],waypoint[targetRegister.waypointCounter + 1]));
+       targetRegister.heading = int(TinyGPSPlus::courseTo(orient.latitude,orient.longitude,waypoint[targetRegister.waypointCounter],waypoint[targetRegister.waypointCounter + 1]));
        if (targetRegister.heading > 180){targetRegister.heading -= 360;}
      }
      
-     modeReg.RC_CONTROL_MODE = 1;
+     mode.RC_CONTROL_MODE = 1;
      
    } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
-     modeReg.RC_CONTROL_MODE = 0;
+     mode.RC_CONTROL_MODE = 0;
      
    } else if (channel5Cycle > 1700){
-     if (modeReg.RC_CONTROL_MODE != 2){
-          targetRegister.alt = oriRegister.alt;
-          targetRegister.intAlt = oriRegister.alt;
+     if (mode.RC_CONTROL_MODE != 2){
+          targetRegister.alt = orient.alt;
+          targetRegister.  = orient.alt;
           ITermT = channel3Cycle;
-          targetRegister.heading = oriRegister.yaw;
+          targetRegister.heading = orient.yaw;
           aileronInitial = channel1Cycle;
           elevatorInitial = channel2Cycle;
           ITermR = channel1Cycle;
           ITermP = channel2Cycle;
-          oriRegister.latitude = gps.location.lat();
-          oriRegister.longitude = gps.location.lng();
-          targetRegister.latitude = oriRegister.latitude;
-          targetRegister.longitude = oriRegister.longitude;
+          orient.latitude = gps.location.lat();
+          orient.longitude = gps.location.lng();
+          targetRegister.latitude = orient.latitude;
+          targetRegister.longitude = orient.longitude;
       }
       
-      modeReg.RC_CONTROL_MODE = 2;
+      mode.RC_CONTROL_MODE = 2;
    }
    
    //------------------Mode Select------------------//
-   switchModes(modeReg);
+   mode.switchModes();
    
    //------------------Channel6Var------------------//
    channel6Var = 2000.0 * (channel6Var - 1000);
    if (channel6Var < 0.0) {channel6Var = 0.0;}
    
    //-------------------Channel 1-------------------//
-   if (modeReg.CH1_ENABLE){
+   if (mode.CH1_ENABLE){
      Aileron.writeMicroseconds(channel1Cycle);
    }
    
    //-------------------Channel 2-------------------//
-   if (modeReg.CH2_ENABLE){
+   if (mode.CH2_ENABLE){
      Elevator.writeMicroseconds(channel2Cycle);
    }
    
    //-------------------Channel 3-------------------//
-   if (modeReg.CH3_ENABLE){
+   if (mode.CH3_ENABLE){
      Throttle.writeMicroseconds(channel3Cycle);
    }
    
    //-------------------Channel 4-------------------//
-   if (modeReg.CH4_ENABLE){
+   if (mode.CH4_ENABLE){
      Rudder.writeMicroseconds(channel4Cycle);
    }
    
 }
- 
- void switchModes(struct modeRegStruct &modeReg){
-   switch (modeReg.RC_CONTROL_MODE){
-     case 0:
-       modeReg.CH1_ENABLE = 1;
-       modeReg.CH2_ENABLE = 1;
-       modeReg.CH3_ENABLE = 1;
-       modeReg.CH4_ENABLE = 1;
-       break;
-       
-     case 1:
-       modeReg.CH1_ENABLE = 1;
-       modeReg.CH2_ENABLE = 1;
-       modeReg.CH3_ENABLE = 0;
-       modeReg.CH4_ENABLE = 0;
-       break;
-       
-      case 2:
-       modeReg.CH1_ENABLE = 0;
-       modeReg.CH2_ENABLE = 0;
-       modeReg.CH3_ENABLE = 0;
-       modeReg.CH4_ENABLE = 0;
-       break;
-   }
- }
- 
- void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct oriRegisterStruct &oriRegister){
+  
+ void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, class ORIENTATION_REGISTER &orient){
    if ((millis() - baroClockOld) >= BARO_DELAY){
     baro.updatePressure();
     baro.calculateAltitude();
@@ -488,11 +438,11 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
   }
  }
  
- void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, struct oriRegisterStruct &oriRegister, unsigned long &compliClockOld){
+ void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
-    compli(gyro, accel, oriRegister, compliClockOld); //Complimentary Filter
-    calcYaw(oriRegister); //Tilt Compensated Compass Code
+    compli(gyro, accel, orient, compliClockOld); //Complimentary Filter
+    calcYaw(orient); //Tilt Compensated Compass Code
     //GPS Navigation Mode
 //    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
 //        yawUpdate(); // Yaw Control for navigation
@@ -515,17 +465,17 @@ void processInterrupts(struct modeRegStruct &modeReg, struct oriRegisterStruct &
   }
  }
  
- void transmitData(struct oriRegisterStruct oriRegister, class ITG3200 gyro, class BMP180 baro, unsigned long &commClockOld){
+ void transmitData(class ORIENTATION_REGISTER &orient, class ITG3200 gyro, class BMP180 baro, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      Serial.print("Roll: ");
-     Serial.println(oriRegister.roll);
+     Serial.println(orient.roll);
      Serial.print("Pitch: ");
-     Serial.println(oriRegister.pitch);
+     Serial.println(orient.pitch);
      Serial.print("Yaw: ");
-     Serial.println(oriRegister.yaw);
+     Serial.println(orient.yaw);
      Serial.print("Alt: ");
      Serial.println(baro.alt);
-   
+     
      commClockOld = millis();
    }
  }

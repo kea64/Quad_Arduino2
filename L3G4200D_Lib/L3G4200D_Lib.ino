@@ -3,7 +3,8 @@
 
 class L3D4200D gyro;
 
-double gyroHeading = 0;
+double gyroHeadingX = 0;
+double gyroHeadingY = 0;
 
 unsigned long clockOld;
 
@@ -21,9 +22,13 @@ void loop(){
   int clockNew = millis();
   int cycle = clockNew - clockOld;
   clockOld = clockNew;
-  gyroHeading = gyroHeading + (1.0)*gyro.x*((cycle*1.0)/1000.0);
+  gyroHeadingX = gyroHeadingX + (1.0)*gyro.x*((cycle*1.0)/1000.0);
+  gyroHeadingY = gyroHeadingY + (1.0)*gyro.y*((cycle*1.0)/1000.0);
   
-  Serial.println(gyroHeading);
+  Serial.println("X: ");
+  Serial.println(gyroHeadingX);
+  Serial.println("Y: ");
+  Serial.println(gyroHeadingY);
   
   delay(20);
   
