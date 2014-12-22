@@ -10,6 +10,9 @@
 #include <H2_L3D4200D.h>
 #include <H2_BMP180.h>
 #include <H2_Registers.h>
+#include <H2_Filters.h>
+#include <H2_TiltComp.h>
+
 
 #define xMagError 0.96
 #define yMagError 1.01
@@ -129,17 +132,19 @@ void loop(){
 
   while(1==1){
     if (MOTOR_ENABLE == 1){
-      checkCompli(gyro, accel, orient, compliClockOld);
-    
-      checkBaro(baro, baroClockOld, orient);
-    
-      checkTemp(baro, tempClockOld);
-    
-      transmitData(orient, baro, commClockOld);
+      //Add Motor Control Code Here
       
     } else {
       Throttle.write(0);
     }
+    
+    checkCompli(gyro, accel, mag, orient, compliClockOld);
+    
+    checkBaro(baro, baroClockOld, orient);
+    
+    checkTemp(baro, tempClockOld);
+    
+    transmitData(orient, baro, commClockOld);
     
     checkArming(MOTOR_ENABLE);
     
@@ -147,11 +152,11 @@ void loop(){
   
 }
 
-void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
+void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, accel, orient, compliClockOld); //Complimentary Filter
-    calcYaw(orient); //Tilt Compensated Compass Code
+    calcYaw(mag, orient, ROLL_OFFSET, PITCH_OFFSET, YAW_OFFSET); //Tilt Compensated Compass Code
     //GPS Navigation Mode
 //    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
 //        yawUpdate(); // Yaw Control for navigation
@@ -188,20 +193,6 @@ void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class ORIENTATION_REG
   orient.roll = compliAlpha * (orient.roll + (gyro.x) * cycle) + (1 - compliAlpha) * rollAccel;
   
   compliClockOld = millis();
-}
-
-void calcYaw(class ORIENTATION_REGISTER &orient){
-  mag.update();
-  //double CMx = compass_x_scalled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
-  //double CMy = compass_x_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
-  double CMx = mag.xScaled * cos(radians(orient.pitch-PITCH_OFFSET)) + mag.zScaled * sin(radians(orient.pitch-PITCH_OFFSET)); //Adjusts mX reading
-  double CMy = mag.xScaled * sin(radians(orient.roll-ROLL_OFFSET)) * sin(radians(orient.pitch-PITCH_OFFSET)) + mag.yScaled * cos(radians(orient.roll-ROLL_OFFSET)) - mag.zScaled * sin(radians(orient.roll-ROLL_OFFSET)) * cos(radians(orient.pitch-PITCH_OFFSET)); //Adjusts mY Reading
-  
-  orient.yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
-  if (orient.yaw < 0){orient.yaw += 2*PI;}
-  if (orient.yaw > 2*PI) {orient.yaw -= 2*PI;}
-  orient.yaw = orient.yaw * (180/PI);
-  if (orient.yaw <= 360 && orient.yaw > 180) {orient.yaw -= 360;}
 }
 
 void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, class ORIENTATION_REGISTER &orient){

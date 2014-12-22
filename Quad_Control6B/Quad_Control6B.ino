@@ -10,6 +10,8 @@
 #include <H2_ITG3200.h>
 #include <H2_BMP180.h>
 #include <H2_Registers.h>
+#include <H2_Filters.h>
+#include <H2_TiltComp.h>
 
 #define address 0x1E
 #define xMagError 0.94
@@ -267,20 +269,6 @@ void compli(class ITG3200 &gyro, class ADXL345 &accel, class ORIENTATION_REGISTE
   compliClockOld = millis();
 }
 
-void calcYaw(class ORIENTATION_REGISTER &orient){
-  mag.update();
-  //double CMx = compass_x_scalled * cos(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_z_scalled * sin(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mX reading
-  //double CMy = compass_x_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * sin(radians(oriRegister.pitch-PITCH_OFFSET)) + compass_y_scalled * cos(radians(oriRegister.roll-ROLL_OFFSET)) - compass_z_scalled * sin(radians(oriRegister.roll-ROLL_OFFSET)) * cos(radians(oriRegister.pitch-PITCH_OFFSET)); //Adjusts mY Reading
-  double CMx = mag.xScaled * cos(radians(orient.pitch-PITCH_OFFSET)) + mag.zScaled * sin(radians(orient.pitch-PITCH_OFFSET)); //Adjusts mX reading
-  double CMy = mag.xScaled * sin(radians(orient.roll-ROLL_OFFSET)) * sin(radians(orient.pitch-PITCH_OFFSET)) + mag.yScaled * cos(radians(orient.roll-ROLL_OFFSET)) - mag.zScaled * sin(radians(orient.roll-ROLL_OFFSET)) * cos(radians(orient.pitch-PITCH_OFFSET)); //Adjusts mY Reading
-  
-  orient.yaw = atan2(CMy,CMx) - radians(YAW_OFFSET);
-  if (orient.yaw < 0){orient.yaw += 2*PI;}
-  if (orient.yaw > 2*PI) {orient.yaw -= 2*PI;}
-  orient.yaw = orient.yaw * (180/PI);
-  if (orient.yaw <= 360 && orient.yaw > 180) {orient.yaw -= 360;}
-}
-
 int calcPID(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
   
   int error = target - currPos;
@@ -378,7 +366,7 @@ void processInterrupts(class MODE_REGISTER mode, class ORIENTATION_REGISTER &ori
    } else if (channel5Cycle > 1700){
      if (mode.RC_CONTROL_MODE != 2){
           targetRegister.alt = orient.alt;
-          targetRegister.  = orient.alt;
+          targetRegister.intAlt  = orient.alt;
           ITermT = channel3Cycle;
           targetRegister.heading = orient.yaw;
           aileronInitial = channel1Cycle;
@@ -442,7 +430,7 @@ void processInterrupts(class MODE_REGISTER mode, class ORIENTATION_REGISTER &ori
    //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, accel, orient, compliClockOld); //Complimentary Filter
-    calcYaw(orient); //Tilt Compensated Compass Code
+    calcYaw(mag, orient, ROLL_OFFSET, PITCH_OFFSET, YAW_OFFSET); //Tilt Compensated Compass Code
     //GPS Navigation Mode
 //    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
 //        yawUpdate(); // Yaw Control for navigation
