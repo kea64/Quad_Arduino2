@@ -13,6 +13,7 @@ hold off;
 axis([-5,5,-5,5]);
 
 rotation = 0;
+rotorTorque = -5;
 xCoord = 0;
 yCoord = 0;
 
@@ -20,9 +21,9 @@ maxServo = 2000;
 minServo = 1000;
 midServo = 1500;
 
-inRoll = 2000;
-inPitch = 1500;
-inYaw = 1600;
+inRoll = 1500;
+inPitch = 1600;
+inYaw = 1300;
 
 absRoll = (inRoll - midServo)/(midServo-minServo);
 absPitch = (inPitch - midServo)/(midServo-minServo);
@@ -31,6 +32,10 @@ absYaw = (inYaw - midServo)/(midServo-minServo);
 angle1 = (0.5 * absRoll + 1/3 * absYaw);
 angle2 = (-0.577 * absPitch - 0.25 * absRoll + 1/3 * absYaw);
 angle3 = (0.577 * absPitch - 0.25 * absRoll + 1/3 * absYaw);
+
+%%angle1 = 1.4;
+%%angle2 = 0.0;
+%%angle3 = -0.4;
 
 angle1New = angle1 * 500 + 1500;
 angle2New = angle2 * 500 + 1500;
@@ -41,7 +46,7 @@ rollScalar = 0.1;
 pitchScalar = 0.1;
 
 while runClock < runTime
-    rotation = yawScalar * (angle1 + angle2 + angle3) + rotation;
+    rotation = yawScalar * (angle1 + angle2 + angle3) - rotorTorque + rotation;
     roll = (angle1 - 0.5 * angle2 - 0.5 * angle3) * rollScalar;
     pitch = (0.577 * angle3 - 0.577 * angle2) * pitchScalar;
     
@@ -66,7 +71,7 @@ while runClock < runTime
     hold off;
     axis([-5,5,-5,5]);
     
-    label = sprintf('Arm 1: %d  Arm 2: %d  Arm 3: %d', angle1, angle2, angle3);
+    label = sprintf('Arm 1: %.0f  Arm 2: %.0f  Arm 3: %.0f', angle1New, angle2New, angle3New);
     xlabel(label);
     pause(timeDelay);
     runClock = runClock + timeDelay;

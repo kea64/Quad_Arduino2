@@ -10,7 +10,7 @@
 #include <H2_L3D4200D.h>
 #include <H2_BMP180.h>
 #include <H2_Registers.h>
-#include <H2_Filters.h>
+//#include <H2_Filters.h>
 #include <H2_TiltComp.h>
 
 
@@ -23,6 +23,9 @@
 #define ROLL_OFFSET 0 //Positive Lowers Aft 4
 #define PITCH_OFFSET 0 //Positive Lowers Aft 2
 #define YAW_OFFSET 0
+#define ROLL_SENSITIVITY 0.5
+#define PITCH_SENSITIVITY 0.5
+#define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
 #define ACC_SCALAR 0.93
 #define ARM_ENGAGE_THRESHOLD 1700
 #define ARM_DISENGAGE_THRESHOLD 1100
@@ -72,6 +75,8 @@ ADXL345 accel;
 L3D4200D gyro;
 BMP180 baro;
 ORIENTATION_REGISTER orient;
+TARGET_REGISTER target;
+MODE_REGISTER mode;
 
 //-------------------------------SETUP-----------------------------------//
 
@@ -98,7 +103,7 @@ void setup(){
   accel.init();
   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
   baro.begin(BARO_MODE, altAlpha);
-  //mode.init(0);
+  mode.init(0);
   
 }
 
@@ -118,6 +123,10 @@ void loop(){
   
   orient.initAngles(accel, ROLL_OFFSET, PITCH_OFFSET);
   
+  target.roll = ROLL_OFFSET;
+  target.pitch = PITCH_OFFSET;
+  target.yaw = orient.yaw;
+  
   //Reset State Control Timers
   compliClockOld = millis();
   baroClockOld = millis();
@@ -131,23 +140,25 @@ void loop(){
 //_______________________________________________________________________//
 
   while(1==1){
-    if (MOTOR_ENABLE == 1){
-      //Add Motor Control Code Here
-      
-    } else {
-      Throttle.write(0);
-    }
-    
     checkCompli(gyro, accel, mag, orient, compliClockOld);
     
     checkBaro(baro, baroClockOld, orient);
     
     checkTemp(baro, tempClockOld);
     
+    processInterrupts(mode, orient, target);
+    
     transmitData(orient, baro, commClockOld);
     
     checkArming(MOTOR_ENABLE);
     
+    if (MOTOR_ENABLE == 1){
+      //Add Motor Control Code Here
+      
+    } else {
+      Throttle.write(0);
+    }
+   
   }
   
 }
@@ -157,27 +168,10 @@ void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, 
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, accel, orient, compliClockOld); //Complimentary Filter
     calcYaw(mag, orient, ROLL_OFFSET, PITCH_OFFSET, YAW_OFFSET); //Tilt Compensated Compass Code
-    //GPS Navigation Mode
-//    if (RC_CONTROL_MODE == 2 || RC_ENABLE != 1){
-//        yawUpdate(); // Yaw Control for navigation
-//        //If GPS Locked, Enable Translation Mode
-//        if (gps.satellites.value() > GPS_SATELLITE_MINIMUM){
-//            FORWARD_MODE_ENABLE = 1;
-//            STRAFE_MODE_ENABLE = 1;
-//            translationUpdate(); //Roll + Pitch Control for navigation   
-//        } else {
-//          FORWARD_MODE_ENABLE = 0;
-//          STRAFE_MODE_ENABLE = 0;
-//        }
-//    }
-//    //Following statement may be deleted after tuning translation
-//    if (RC_CONTROL_MODE == 1){
-//      yawUpdate();
-//      FORWARD_MODE_ENABLE = 0;
-//      STRAFE_MODE_ENABLE = 0;
-//    }
+    
+    compliClockOld = millis();
   }
- }
+}
  
  void compli(class L3D4200D &gyro, class ADXL345 &accel, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
@@ -192,7 +186,6 @@ void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, 
   double rollAccel = atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
   orient.roll = compliAlpha * (orient.roll + (gyro.x) * cycle) + (1 - compliAlpha) * rollAccel;
   
-  compliClockOld = millis();
 }
 
 void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, class ORIENTATION_REGISTER &orient){
@@ -282,4 +275,55 @@ void checkArming(bool &MOTOR_ENABLE){
       MOTOR_ENABLE = 0;
       digitalWrite(13,LOW);
   }
+  //Perhaps Add PID DISABLE Code Here
 }
+
+void processInterrupts(class MODE_REGISTER &mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &targetRegister){
+   if (channel5Cycle < 1300){
+     if (mode.RC_CONTROL_MODE != 1){
+       //NEW MODE 1 CODE HERE
+     }
+     
+     mode.RC_CONTROL_MODE = 1;
+     
+   } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
+     mode.RC_CONTROL_MODE = 0;
+     
+   } else if (channel5Cycle > 1700){
+     if (mode.RC_CONTROL_MODE != 2){
+        //NEW MODE 2 CODE HERE  
+      }
+      
+      mode.RC_CONTROL_MODE = 2;
+   }
+   
+   //------------------Mode Select------------------//
+   mode.switchModes();
+   
+   //--------------------Channel1-------------------//
+   if (mode.CH1_ENABLE){
+     target.roll = (channel1Cycle-1500) * 0.18 * ROLL_SENSITIVITY + ROLL_OFFSET;
+   }
+   
+   //--------------------Channel2-------------------//
+   if (mode.CH2_ENABLE){
+     target.pitch = (channel2Cycle-1500) * 0.18 * PITCH_SENSITIVITY + PITCH_OFFSET;
+   }
+   
+   //--------------------Channel4-------------------//
+   if (mode.CH4_ENABLE){
+     target.yaw = (channel4Cycle-1500) * 0.18 * YAW_SENSITIVITY + target.yaw;
+     if (target.yaw > 180.0){
+       target.yaw -= 360;
+     }
+     if (target.yaw < -180.0){
+       target.yaw += 360;
+     }
+   }
+   
+   //------------------Channel6Var------------------//
+   channel6Var = 2000.0 * (channel6Var - 1000);
+   if (channel6Var < 0.0) {channel6Var = 0.0;}
+   
+}
+
