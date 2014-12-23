@@ -300,6 +300,10 @@ void processInterrupts(class MODE_REGISTER &mode, class ORIENTATION_REGISTER &or
    //------------------Mode Select------------------//
    mode.switchModes();
    
+   updateTarget(target);
+}
+
+void updateTarget(class TARGET_REGISTER &target){
    //--------------------Channel1-------------------//
    if (mode.CH1_ENABLE){
      target.roll = (channel1Cycle-1500) * 0.18 * ROLL_SENSITIVITY + ROLL_OFFSET;
