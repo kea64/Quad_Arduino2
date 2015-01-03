@@ -10,7 +10,7 @@
 #include <H2_ITG3200.h>
 #include <H2_BMP180.h>
 #include <H2_Registers.h>
-#include <H2_Filters.h>
+//#include <H2_Filters.h>
 #include <H2_TiltComp.h>
 
 #define address 0x1E
@@ -265,8 +265,7 @@ void compli(class ITG3200 &gyro, class ADXL345 &accel, class ORIENTATION_REGISTE
   
   double rollAccel = atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR + ROLL_OFFSET;
   orient.roll = compliAlpha * (orient.roll + ((gyro.y)/14.375) * cycle) + (1 - compliAlpha) * rollAccel;
-  
-  compliClockOld = millis();
+
 }
 
 int calcPID(struct PIDStruct &motion, double target, double currPos, const double kp, const double ki, const double kd){
@@ -346,7 +345,7 @@ void channel6Interrupt(){
   }
 }
 
-void processInterrupts(class MODE_REGISTER mode, class ORIENTATION_REGISTER &orient, struct targetRegisterStruct &targetRegister, double &ITermT, double &ITermR, double &ITermP, int &aileronInitial, int &elevatorInitial){
+void processInterrupts(class MODE_REGISTER &mode, class ORIENTATION_REGISTER &orient, struct targetRegisterStruct &targetRegister, double &ITermT, double &ITermR, double &ITermP, int &aileronInitial, int &elevatorInitial){
    if (channel5Cycle < 1300){
      if (mode.RC_CONTROL_MODE != 1){
        targetRegister.alt = waypoint[targetRegister.waypointCounter + 2];
@@ -450,6 +449,7 @@ void processInterrupts(class MODE_REGISTER mode, class ORIENTATION_REGISTER &ori
 //      FORWARD_MODE_ENABLE = 0;
 //      STRAFE_MODE_ENABLE = 0;
 //    }
+    compliClockOld = millis();
   }
  }
  

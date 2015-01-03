@@ -13,7 +13,7 @@ hold off;
 axis([-5,5,-5,5]);
 
 rotation = 0;
-rotorTorque = -5;
+rotorTorque = -0;
 xCoord = 0;
 yCoord = 0;
 
@@ -22,7 +22,7 @@ minServo = 1000;
 midServo = 1500;
 
 inRoll = 1500;
-inPitch = 1600;
+inPitch = 1800;
 inYaw = 1300;
 
 absRoll = (inRoll - midServo)/(midServo-minServo);
