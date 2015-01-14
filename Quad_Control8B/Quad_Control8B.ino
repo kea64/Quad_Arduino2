@@ -11,6 +11,7 @@
 #include <H2_BMP180.h>
 #include <H2_Registers.h>
 #include <H2_TiltComp.h>
+#include <H2_Channel.h>
 
 
 #define xMagError 0.94
@@ -25,16 +26,16 @@
 #define ROLL_SENSITIVITY 0.5
 #define PITCH_SENSITIVITY 0.5
 #define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
-#define ROLL_MAXIMUM 1900
-#define ROLL_MINIMUM 1100
-#define PITCH_MAXIMUM 1900
-#define PITCH_MINIMUM 1100
-#define THROTTLE_MAXIMUM 1790
-#define THROTTLE_MINIMUM 1350
-#define YAW_RATE_MAXIMUM 1625
-#define YAW_RATE_MINIMUM 1375
-#define GPS_ROLL_MAXIMUM 100
-#define GPS_PITCH_MAXIMUM 100
+#define ROLL_MAXIMUM 45
+#define ROLL_MINIMUM -45
+#define PITCH_MAXIMUM 45
+#define PITCH_MINIMUM -45
+#define THROTTLE_MAXIMUM 90
+#define THROTTLE_MINIMUM -90
+#define YAW_MAXIMUM 45
+#define YAW_MINIMUM -45
+#define GPS_ROLL_MAXIMUM 20
+#define GPS_PITCH_MAXIMUM 20
 #define ACC_SCALAR 0.93
 #define ARM_ENGAGE_THRESHOLD 1700
 #define ARM_DISENGAGE_THRESHOLD 1100
@@ -161,8 +162,9 @@ void loop(){
   BMP180 baro;
   ORIENTATION_REGISTER orient;
   TARGET_REGISTER target;
-  MODE_REGISTER mode;
+  MODE2_REGISTER mode;
   PID_REGISTER PID;
+  CHANNEL_REGISTER CHANNEL;
   
   unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, elevClockOld, landClockOld, PIDClockOld;
   
@@ -170,7 +172,7 @@ void loop(){
   accel.init();
   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
   baro.begin(BARO_MODE, altAlpha);
-  mode.init(0);
+  mode.switchModes(0);
   
   gyro.calibrate();
   
@@ -202,11 +204,10 @@ void loop(){
     updateGPS(mode, orient, target);
     
     //Interpretation and Processing
-    processInterrupts(mode, orient, target, PID);
-    updatePID(mode, orient, target, PID, PIDClockOld);
+    processGPS(mode, orient, target);
     
     //Motor Output
-    transmitCommands(mode, PID);
+    updatePID(mode, orient, target, CHANNEL, PIDClockOld);
     
     //Status Feedback
     transmitData(orient, baro, commClockOld);
@@ -318,104 +319,89 @@ void channel6Interrupt(){
   }
 }
 
-void processInterrupts(class MODE_REGISTER &mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target, class PID_REGISTER &PID){
-   if (channel5Cycle < 1300){
-     if (mode.RC_CONTROL_MODE != 1){
-       target.alt = waypoint[target.waypointCounter + 2];
-       target.intAlt = orient.alt;
-       PID.throttle.iTerm = channel3Cycle;
-       PID.roll.initial = channel1Cycle;
-       PID.pitch.initial = channel2Cycle;
-       target.yaw = int(TinyGPSPlus::courseTo(orient.latitude,orient.longitude,waypoint[target.waypointCounter],waypoint[target.waypointCounter + 1]));
-       if (target.yaw > 180){target.yaw -= 360;}
-     }
-     
-     mode.RC_CONTROL_MODE = 1;
-     
-   } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
-     mode.RC_CONTROL_MODE = 0;
-     
-   } else if (channel5Cycle > 1700){
-     if (mode.RC_CONTROL_MODE != 2){
-          target.alt = orient.alt;
-          target.intAlt  = orient.alt;
-          PID.throttle.iTerm = channel3Cycle;
-          target.yaw = orient.yaw;
-          PID.roll.initial = channel1Cycle;
-          PID.pitch.initial = channel2Cycle;
-          PID.roll.iTerm = channel1Cycle;
-          PID.pitch.iTerm = channel2Cycle;
-          orient.latitude = gps.location.lat();
-          orient.longitude = gps.location.lng();
-          target.latitude = orient.latitude;
-          target.longitude = orient.longitude; 
-      }
-      
-      mode.RC_CONTROL_MODE = 2;
-   }
-   
-   //------------------Mode Select------------------//
-   mode.switchModes();
-   
-   updateTarget(target);
-}
-
-void updateTarget(class TARGET_REGISTER &target){
-   //------------------Channel6Var------------------//
-   channel6Var = 2000.0 * (channel6Var - 1000);
-   if (channel6Var < 0.0) {channel6Var = 0.0;}
-   
-}
-
-void updatePID(class MODE_REGISTER &mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target, class PID_REGISTER &PID, unsigned long &PIDClockOld){
-  if ((millis() - PIDClockOld) >= PID_DELAY){
+void processInterrupts2(class CHANNEL_REGISTER &CHANNEL, class MODE2_REGISTER &mode, class TARGET_REGISTER &target){
+  bool newMode = 0;
   
+  if (channel5Cycle < 1300){
+    if (mode.RC_CONTROL_MODE != 1){
+      mode.RC_CONTROL_MODE = 1;
+      initializeAuto(mode, target);
+    }
+    mode.switchModes(1);
+    
+  } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
+    if (mode.RC_CONTROL_MODE != 0){
+      mode.RC_CONTROL_MODE = 0;
+    }
+    mode.switchModes(0);
+    
+  } else if (channel5Cycle > 1700){
+    if (mode.RC_CONTROL_MODE != 2){
+      mode.RC_CONTROL_MODE = 2;
+    }
+    mode.switchModes(2);
+    
+  }
+  
+  
+}
+
+void motorController(){
+  
+ //Enter Special Code Here to Take Non-Auxiliary Code and Output Tailored Controls
+ 
+}
+
+void updatePID(class MODE2_REGISTER &mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target, class CHANNEL_REGISTER &CHANNEL, unsigned long &PIDClockOld){
+  if ((millis() - PIDClockOld) >= PID_DELAY){
+    
     double PIDCycle = (((millis() - PIDClockOld)*1.0)/1000.0);
     
-    if (!mode.CH1_ENABLE){
-      PID.roll.control = calcPID(PID.roll, orient, target, 1, 0, 0, PID.roll.initial + GPS_ROLL_MAXIMUM , PID.roll.initial - GPS_ROLL_MAXIMUM, gpr, gir, gdr, PIDCycle);
+    // Manual PID Target Set
+    int targetManualRoll;
+    int targetManualPitch;
+    int targetManualThrottle;
+    int targetManualYaw;
+    
+    int targetAutoRoll;
+    int targetAutoPitch;
+    int targetAutoThrottle;
+    int targetAutoYaw;
+    
+    if (mode.CH1_AUTO_EN){
+      double errorGPSRoll = (target.longitude * cos(radians(orient.yaw)) + target.latitude * sin(radians(orient.yaw)));
+      calcPID(CHANNEL.AUTO_ROLL, orient, target, errorGPSRoll, orient.roll, CHANNEL.ROLL.initial + GPS_ROLL_MAXIMUM , CHANNEL.ROLL.initial - GPS_ROLL_MAXIMUM, gpr, gir, gdr, PIDCycle);
+      targetManualRoll = CHANNEL.AUTO_ROLL.control;
+    } else {
+      targetManualRoll = CHANNEL.servo2HalfDegrees(channel1Cycle);
     }
-    if (!mode.CH2_ENABLE){
-      PID.pitch.control = calcPID(PID.pitch, orient, target, 2, 0, 0, PID.pitch.initial + GPS_PITCH_MAXIMUM , PID.pitch.initial - GPS_PITCH_MAXIMUM, gpp, gip, gdp, PIDCycle);
+    
+    if (mode.CH2_AUTO_EN){
+      double errorGPSPitch = -(target.latitude * cos(radians(orient.yaw)) + target.longitude * sin(radians(orient.yaw)));
+      calcPID(CHANNEL.AUTO_PITCH, orient, target, errorGPSPitch, orient.pitch, CHANNEL.PITCH.initial + GPS_PITCH_MAXIMUM , CHANNEL.PITCH.initial - GPS_PITCH_MAXIMUM, gpp, gip, gdp, PIDCycle);
+      targetManualPitch = CHANNEL.AUTO_PITCH.control;
+    } else {
+      targetManualPitch = CHANNEL.servo2HalfDegrees(channel2Cycle);
     }
-    if (!mode.CH3_ENABLE){
-      target.incAlt();
-      PID.throttle.control = calcPID(PID.throttle, orient, target, 0, target.intAlt, orient.alt, THROTTLE_MAXIMUM, THROTTLE_MINIMUM, kpt, kit, kdt, PIDCycle);
-    }
-    if (!mode.CH4_ENABLE){
-      PID.yaw.control = calcPID(PID.yaw, orient, target, 0, target.yaw, orient.yaw, YAW_RATE_MAXIMUM, YAW_RATE_MINIMUM, kpy, kiy, kdy, PIDCycle);
+    
+    if (!mode.AUXI_EN){
+      //KRIS- DOUBLE CHECK THIS BEFORE RUNNING
+      double errorRoll = targetManualRoll - orient.roll;
+      double errorPitch = targetManualPitch - orient.pitch;
+      double errorThrottle = targetManualThrottle - orient.throttle;
+      double errorYaw = targetManualYaw - orient.yaw;
+      
+      calcPID(CHANNEL.ROLL, orient, target, errorRoll, orient.roll, ROLL_MAXIMUM , ROLL_MINIMUM, kpr, kir, kdr, PIDCycle);
+      calcPID(CHANNEL.PITCH, orient, target, errorPitch, orient.pitch, PITCH_MAXIMUM , PITCH_MINIMUM, kpp, kip, kdp, PIDCycle);
+      calcPID(CHANNEL.THROTTLE, orient, target, errorThrottle, orient.throttle, THROTTLE_MAXIMUM, THROTTLE_MINIMUM, kpt, kit, kdt, PIDCycle);
+      calcPID(CHANNEL.YAW, orient, target, errorYaw, orient.yaw, YAW_MAXIMUM, YAW_MINIMUM, kpy, kiy, kdy, PIDCycle);
     }
     
     PIDClockOld = millis();
-  }
+  } 
 }
 
-int calcPID(class PID_SINGLE &motion, class ORIENTATION_REGISTER orient, class TARGET_REGISTER target, int type, double targetBasic, double currPos, const double maximum, const double minimum, const double kp, const double ki, const double kd, double cycle){
-  //Type Contol Parameter
-  //0 - Basic PID
-  //1 - GPS Roll PID
-  //2 - GPS Pitch PID
-  
-  double error;
-  
-  {
-    double errorLongitude = target.longitude - orient.longitude;
-    double errorLatitude = target.latitude - orient.latitude;
-    
-    switch (type){
-     case 0:
-       error = targetBasic - currPos;
-       break;
-     
-     case 1:
-       error = (errorLongitude * cos(radians(orient.yaw)) + errorLatitude * sin(radians(orient.yaw)));
-       break;
-     
-     case 2:
-       error = -(errorLatitude * cos(radians(orient.yaw)) + errorLongitude * sin(radians(orient.yaw)));
-       break;
-    };
-  }
+void calcPID(class CHANNEL &motion, class ORIENTATION_REGISTER orient, class TARGET_REGISTER target, double error, double currPos, const double maximum, const double minimum, const double kp, const double ki, const double kd, double cycle){
   
   //int error = target - currPos;
   motion.iTerm += (ki * 0.001 * cycle * error);
@@ -425,51 +411,15 @@ int calcPID(class PID_SINGLE &motion, class ORIENTATION_REGISTER orient, class T
   if (control > maximum) {control = maximum;}
   if (control < minimum) {control = minimum;}
   motion.lastPos = currPos;
-  int controlOut = int(control);
+  motion.control = int(control);
   
-  return(controlOut);
 }
 
-void transmitCommands(class MODE_REGISTER mode, class PID_REGISTER PID){
-  //NEEDS PID Structs/Classes!
-  if (mode.CH1_ENABLE){
-    Aileron.writeMicroseconds(channel1Cycle);
-  } else {
-    Aileron.writeMicroseconds(PID.GPSRoll.control);
-  }
-  
-  if (mode.CH2_ENABLE){
-    Elevator.writeMicroseconds(channel2Cycle);
-  } else {
-    Elevator.writeMicroseconds(PID.GPSPitch.control);
-  }
-  
-  if (mode.CH3_ENABLE){
-    Throttle.writeMicroseconds(channel3Cycle);
-  } else {
-    Throttle.writeMicroseconds(PID.throttle.control);
-  }
-  
-  if (mode.CH4_ENABLE){
-    Rudder.writeMicroseconds(channel4Cycle);
-  } else {
-    Rudder.writeMicroseconds(PID.yaw.control);
-  }
-}
-
-void updateGPS(class MODE_REGISTER mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target){
+void updateGPS(class MODE2_REGISTER mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target){
   while (Serial.available() > 0){
     if (gps.encode(Serial.read())){
       orient.latitude = gps.location.lat();
       orient.longitude = gps.location.lng();
-      
-      if (mode.GPS_NAV_ENABLE){
-        target.alt = waypoint[target.waypointCounter + 2];
-        target.yaw = int(TinyGPSPlus::courseTo(gps.location.lat(),gps.location.lng(),waypoint[target.waypointCounter],waypoint[target.waypointCounter + 1]));
-        if (target.yaw > 180){target.yaw -= 360;}
-      }
-      
-      distanceCheck(orient, target);
       
       if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
         digitalWrite(13,HIGH);
@@ -490,4 +440,39 @@ void distanceCheck(class ORIENTATION_REGISTER orient, class TARGET_REGISTER &tar
      //Land Code Here Perhaps
     }
   }
+}
+
+void processGPS(class MODE2_REGISTER mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target){ 
+   if (mode.CH1_AUTO_EN || mode.CH2_AUTO_EN){
+     if (mode.CH1_HOLD_EN || mode.CH2_HOLD_EN){
+       target.latitude = target.holdLatitude - orient.latitude;
+       target.longitude = target.holdLongitude - orient.longitude;
+     } else {
+       target.latitude = waypoint[target.waypointCounter] - orient.latitude;
+       target.longitude = waypoint[target.waypointCounter + 1] - orient.longitude;
+     }
+   } 
+  
+   if (mode.CH3_AUTO_EN){
+     if (mode.CH3_HOLD_EN){
+       target.alt = target.holdAlt;
+     } else {
+       target.alt = waypoint[target.waypointCounter + 2];
+     }
+   }
+   
+   if (mode.CH4_AUTO_EN){
+     if (mode.CH4_HOLD_EN){
+       target.yaw = target.holdYaw;
+     } else {
+       target.yaw = int(TinyGPSPlus::courseTo(gps.location.lat(),gps.location.lng(),waypoint[target.waypointCounter],waypoint[target.waypointCounter + 1]));
+       if (target.yaw > 180){target.yaw -= 360;}
+     }
+   }
+   
+   distanceCheck(orient, target);
+}
+
+void initializeAuto(class MODE2_REGISTER mode, class TARGET_REGISTER &target){
+ 
 }
