@@ -9,9 +9,9 @@
 #include <H2_ADXL345.h>
 #include <H2_ITG3200.h>
 #include <H2_BMP180.h>
-#include <H2_Registers.h>
 #include <H2_TiltComp.h>
-#include <H2_Channel.h>
+#include <H2_Orient.h>
+#include <H2_Target.h>
 #include <H2_PID.h>
 
 
@@ -27,23 +27,26 @@
 #define ROLL_SENSITIVITY 0.5
 #define PITCH_SENSITIVITY 0.5
 #define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
-#define ROLL_MAXIMUM 45
-#define ROLL_MINIMUM -45
-#define PITCH_MAXIMUM 45
-#define PITCH_MINIMUM -45
-#define THROTTLE_MAXIMUM 90
-#define THROTTLE_MINIMUM -90
-#define YAW_MAXIMUM 45
-#define YAW_MINIMUM -45
-#define GPS_ROLL_MAXIMUM 20
-#define GPS_PITCH_MAXIMUM 20
+#define ROLL_MAXIMUM 250
+#define PITCH_MAXIMUM 250
+#define THROTTLE_MAXIMUM 1900
+#define THROTTLE_MINIMUM 1100
+#define THROTTLE_CUTOFF 1150
+#define YAW_MAXIMUM 200
+#define YAW_RATE 0.1
+#define GPS_ROLL_MAXIMUM 150
+#define GPS_PITCH_MAXIMUM 150
 #define ACC_SCALAR 0.93
 #define ARM_ENGAGE_THRESHOLD 1700
 #define ARM_DISENGAGE_THRESHOLD 1100
 #define ARM_THROTTLE_THRESHOLD 1100
 #define GPS_SATELLITE_MINIMUM 5
+#define SERVO_MAXIMUM 2000
+#define SERVO_MIDPOINT 1500
+#define SERVO_MINIMUM 1000
 
 #define GPS_EN 1
+#define AUXILIARY_EN 1
 #define QUAD_EN 1 //Choose only 1 Frame. Defaults to Quad.
 #define TRI_EN 0
 
@@ -55,13 +58,13 @@
 #define kip 0
 #define kdp 0
 
-#define kpt 0
-#define kit 0
-#define kdt 0
-
 #define kpy 0
 #define kiy 0
 #define kdy 0
+
+#define kpt 0
+#define kit 0
+#define kdt 0
 
 #define gpr 0
 #define gir 0
@@ -80,7 +83,6 @@
 #define TEMP_DELAY 1000
 #define COMM_DELAY 250
 #define ELEV_DELAY 10
-#define LAND_DELAY 20000
 #define CONTROL_DELAY 5
 
 #define aileronPin A3
@@ -156,10 +158,11 @@ void loop(){
   ADXL345 accel;
   ITG3200 gyro;
   BMP180 baro;
-  ORIENTATION_REGISTER orient;
-  TARGET_REGISTER target;
-  MODE2_REGISTER mode;
+  ORIENT_STRUCT orient;
+  TARGET_STRUCT target;
+  PID_REGISTER channels;
   
+  int RC_CONTROL_MODE = 0;
   
   unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, elevClockOld, landClockOld, controlClockOld;
   
@@ -167,11 +170,18 @@ void loop(){
   accel.init();
   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
   baro.begin(BARO_MODE, altAlpha);
-  mode.switchModes(0);
+  
+  channels.rollPID.updateDefaults(kpr, kir, kdr, SERVO_MIDPOINT + ROLL_MAXIMUM, SERVO_MIDPOINT - ROLL_MAXIMUM, ROLL_OFFSET);
+  channels.pitchPID.updateDefaults(kpp, kip, kdp, SERVO_MIDPOINT + PITCH_MAXIMUM, SERVO_MIDPOINT - PITCH_MAXIMUM, PITCH_OFFSET);
+  channels.yawPID.updateDefaults(kpy, kiy, kdy, SERVO_MIDPOINT + YAW_MAXIMUM, SERVO_MIDPOINT - YAW_MAXIMUM, YAW_OFFSET);
+  
+  channels.autoRollPID.updateDefaults(gpr, gir, gdr, SERVO_MIDPOINT + GPS_ROLL_MAXIMUM, SERVO_MIDPOINT - GPS_ROLL_MAXIMUM, 0);
+  channels.autoPitchPID.updateDefaults(gpp, gip, gdp, SERVO_MIDPOINT + GPS_PITCH_MAXIMUM, SERVO_MIDPOINT - GPS_PITCH_MAXIMUM, 0);
+  channels.autoThrottlePID.updateDefaults(kpt, kit, kdt, THROTTLE_MAXIMUM, -THROTTLE_MAXIMUM, 0);
   
   gyro.calibrate();
   
-  orient.initAngles(accel, ROLL_OFFSET, PITCH_OFFSET);
+  initAngles(orient, accel);
   
   target.roll = ROLL_OFFSET;
   target.pitch = PITCH_OFFSET;
@@ -198,19 +208,24 @@ void loop(){
     checkTemp(baro, tempClockOld);
     
     if (GPS_EN){
-      updateGPS(mode, orient, target);
+      updateGPS(orient, target);
     }
     
-    updateController(controlClockOld);
+    updateMode(channels, target, orient, RC_CONTROL_MODE);
+    updateController(channels, target, orient, RC_CONTROL_MODE, controlClockOld);
     
     //Status Feedback
-    transmitData(orient, baro, commClockOld);
-    
-  }
-  
+    transmitData(orient, baro, commClockOld); 
+  } 
 }
 
-void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
+void initAngles(struct ORIENT_STRUCT &orient, class ADXL345 &acc){
+  acc.update(); //Obtains Initial Angles; Quad must be motionless
+  orient.roll = atan2(acc.y, acc.z)*(180 / PI) + ROLL_OFFSET; //Accounts for Angle Differences
+  orient.pitch = atan2(-acc.x, acc.z)*(180 / PI) + PITCH_OFFSET;
+}
+
+void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
@@ -220,7 +235,7 @@ void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, c
   }
 }
  
-void compli(class ITG3200 &gyro, class ADXL345 &accel, class ORIENTATION_REGISTER &orient, unsigned long &compliClockOld){
+void compli(class ITG3200 &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
   gyro.update();
   accel.update();
@@ -234,14 +249,20 @@ void compli(class ITG3200 &gyro, class ADXL345 &accel, class ORIENTATION_REGISTE
   orient.roll = compliAlpha * (orient.roll + (gyro.x) * cycle) + (1 - compliAlpha) * rollAccel;
 }
 
-void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, class ORIENTATION_REGISTER &orient){
+void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient){
    if ((millis() - baroClockOld) >= BARO_DELAY){
     baro.updatePressure();
     baro.calculateAltitude();
     baroClockOld = millis();
   }
- }
- 
+}
+
+void incAlt(struct TARGET_STRUCT &target){
+	//Elevation Change Smoothing -- Delays Target Altitude to Maximize I Gain
+	if (target.intAlt < target.alt){ target.intAlt += 0.03; }
+	if (target.intAlt > target.alt){ target.intAlt -= 0.03; }
+}
+
 void checkTemp(class BMP180 &baro, unsigned long &tempClockOld){
    if ((millis() - tempClockOld) >= TEMP_DELAY){
     baro.updateTemperature();
@@ -249,7 +270,7 @@ void checkTemp(class BMP180 &baro, unsigned long &tempClockOld){
   }
 }
 
-void updateGPS(class MODE2_REGISTER mode, class ORIENTATION_REGISTER &orient, class TARGET_REGISTER &target){
+void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
   while (Serial.available() > 0){
     if (gps.encode(Serial.read())){
       orient.latitude = gps.location.lat();
@@ -257,14 +278,16 @@ void updateGPS(class MODE2_REGISTER mode, class ORIENTATION_REGISTER &orient, cl
       
       if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
         digitalWrite(13,HIGH);
+        orient.GPS_LOCK = 1;
       } else {
         digitalWrite(13,LOW);
+        orient.GPS_LOCK = 0;
       }
     }
   }
 }
 
-void transmitData(class ORIENTATION_REGISTER &orient, class BMP180 baro, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, class BMP180 baro, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      Serial.print("Roll: ");
      Serial.println(orient.roll);
@@ -279,8 +302,42 @@ void transmitData(class ORIENTATION_REGISTER &orient, class BMP180 baro, unsigne
    }
 }
 
-void updateController(unsigned long &controlClockOld){
+void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, int RC_CONTROL_MODE, unsigned long &controlClockOld){
    if ((millis() - controlClockOld) >= CONTROL_DELAY){
+     double cycle = millis() - controlClockOld;
+     double output1, output2, output3, output4;
+     
+     double rollSensor = newMap(orient.roll, -90, 90, 1000, 2000);
+     double pitchSensor = newMap(orient.pitch, -90, 90, 1000, 2000);
+     double yawSensor = newMap(orient.pitch, -180, 180, 1000, 2000);
+     
+     switch (RC_CONTROL_MODE){
+       case 0:
+           if (AUXILIARY_EN){
+             output1 = channel1Cycle;
+             output2 = channel2Cycle;
+             output3 = channel3Cycle;
+             output4 = channel4Cycle;
+           } else {
+             //channels.rollPID.calc(error, sensor, cycle);
+             
+             channels.rollPID.calc(channel1Cycle - rollSensor, rollSensor, cycle);
+             channels.pitchPID.calc(channel1Cycle - pitchSensor, pitchSensor, cycle);
+             channels.yawPID.calc(target.yawRate - yawSensor, yawSensor, cycle);
+             
+             output1 = channels.rollPID.getControl();
+             output2 = channels.pitchPID.getControl();
+             output3 = channel3Cycle;
+             output4 = channels.yawPID.getControl();
+           }
+           break;
+       case 1:
+           
+           break;
+       case 2:
+       
+           break;
+     }
      
      processMotors();
      
@@ -296,6 +353,60 @@ void processMotors(){
   }
   
 }
+
+void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, int &RC_CONTROL_MODE){
+  if (channel5Cycle < 1300){
+    if (RC_CONTROL_MODE != 1){
+      target.alt = waypoint[target.waypointCounter + 2];
+      target.intAlt = orient.alt;
+      channels.autoThrottlePID.setIntegral(channel3Cycle);
+      channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
+      channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
+      channels.autoRollPID.setIntegral(channel1Cycle);
+      channels.autoPitchPID.setIntegral(channel2Cycle);
+    }
+    
+    if (GPS_EN && orient.GPS_LOCK){
+      target.yaw = int(TinyGPSPlus::courseTo(orient.latitude,orient.longitude,waypoint[target.waypointCounter],waypoint[target.waypointCounter + 1]));
+    } else {
+      target.yaw = orient.yaw;
+    }
+    
+    RC_CONTROL_MODE = 1;
+    
+  } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
+    if (RC_CONTROL_MODE != 0){
+      target.yawRate = orient.yaw;
+    }
+    
+    target.yawRate += (channel4Cycle - SERVO_MIDPOINT) * YAW_RATE;
+    if (target.yawRate > SERVO_MAXIMUM){
+      target.yawRate = SERVO_MAXIMUM;
+    } else if (target.yawRate < SERVO_MINIMUM){
+      target.yawRate = SERVO_MINIMUM;
+    }
+    
+    RC_CONTROL_MODE = 0;
+    
+  } else if (channel5Cycle > 1700){
+    if (RC_CONTROL_MODE != 2){
+      target.alt = orient.alt;
+      target.intAlt = orient.alt;
+      channels.autoThrottlePID.setIntegral(channel3Cycle);
+      channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
+      channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
+      channels.autoRollPID.setIntegral(channel1Cycle);
+      channels.autoPitchPID.setIntegral(channel2Cycle);
+      target.latitude = orient.latitude;
+      target.longitude = orient.longitude;
+      target.yaw = orient.yaw;
+    }
+    
+    RC_CONTROL_MODE = 2;
+    
+  }
+}
+  
 void channel1Interrupt(){
   if (digitalRead(channel1) == 1){
       channel1Start = micros();
@@ -342,4 +453,8 @@ void channel6Interrupt(){
   } else {
       channel6Cycle = micros() - channel6Start;
   }
+}
+
+int newMap(int inValue, int inLow, int inHigh, int outLow, int outHigh){
+  return ((inValue - inLow) * (1.0 * (outHigh - outLow)) / (1.0 * (inHigh - inLow)) + outLow);
 }
