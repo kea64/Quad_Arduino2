@@ -8,34 +8,37 @@
 #include <H2_HMC5883L.h>
 #include <H2_ADXL345.h>
 #include <H2_ITG3200.h>
+#include <H2_L3D4200D.h>
 #include <H2_BMP180.h>
 #include <H2_TiltComp.h>
 #include <H2_Orient.h>
 #include <H2_Target.h>
 #include <H2_PID.h>
+#include <H2_Output.h>
 
-
-#define xMagError 0.94
-#define yMagError 0.99
-#define zMagError 0.94
-#define xMagOffset -90
-#define yMagOffset -85
-#define zMagOffset 225
-#define ROLL_OFFSET 0 //Positive Lowers Aft 4
-#define PITCH_OFFSET 0 //Positive Lowers Aft 2
-#define YAW_OFFSET 0
+#define xMagError 0.96
+#define yMagError 1.01
+#define zMagError 0.95
+#define xMagOffset -23
+#define yMagOffset -102
+#define zMagOffset 0
+#define ROLL_OFFSET 0 
+#define PITCH_OFFSET 0 
+#define YAW_OFFSET 90
 #define ROLL_SENSITIVITY 0.5
 #define PITCH_SENSITIVITY 0.5
 #define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
-#define ROLL_MAXIMUM 250
-#define PITCH_MAXIMUM 250
+#define ROLL_RATE_MAXIMUM 250
+#define PITCH_RATE_MAXIMUM 250
+#define YAW_RATE_MAXIMUM 200
+#define ROLL_STAB_MAXIMUM 400
+#define PITCH_STAB_MAXIMUM 400
+#define YAW_STAB_MAXIMUM 300
 #define THROTTLE_MAXIMUM 1900
 #define THROTTLE_MINIMUM 1100
 #define THROTTLE_CUTOFF 1150
-#define YAW_MAXIMUM 200
-#define YAW_RATE 0.1
-#define GPS_ROLL_MAXIMUM 150
-#define GPS_PITCH_MAXIMUM 150
+#define GPS_ROLL_MAXIMUM 20
+#define GPS_PITCH_MAXIMUM 20
 #define ACC_SCALAR 0.93
 #define ARM_ENGAGE_THRESHOLD 1700
 #define ARM_DISENGAGE_THRESHOLD 1100
@@ -45,34 +48,51 @@
 #define SERVO_MIDPOINT 1500
 #define SERVO_MINIMUM 1000
 
-#define GPS_EN 1
-#define AUXILIARY_EN 1
-#define QUAD_EN 1 //Choose only 1 Frame. Defaults to Quad.
-#define TRI_EN 0
+#define ARM_THROTTLE_THRESHOLD 1100
+#define ARM_ENGAGE_THRESHOLD 1700
+#define ARM_DISENGAGE_THRESHOLD 1100
 
-#define kpr 0
-#define kir 0
-#define kdr 0
+#define GPS_EN 0
+#define AUXILIARY_EN 0
+#define ACRO_EN 1
+#define QUAD_EN 0 //Choose only 1 Frame. Defaults to Quad.
+#define TRI_EN 1
 
-#define kpp 0
-#define kip 0
-#define kdp 0
+#define KPRS 0
+#define KIRS 0
+#define KDRS 0
 
-#define kpy 0
-#define kiy 0
-#define kdy 0
+#define KPRR 0
+#define KIRR 0
+#define KDRR 0
 
-#define kpt 0
-#define kit 0
-#define kdt 0
+#define KPPS 0
+#define KIPS 0
+#define KDPS 0
 
-#define gpr 0
-#define gir 0
-#define gdr 0
+#define KPPR 0
+#define KIPR 0
+#define KDPR 0
 
-#define gpp 0
-#define gip 0
-#define gdp 0
+#define KPYS 0
+#define KIYS 0
+#define KDYS 0
+
+#define KPYR 0
+#define KIYR 0
+#define KDYR 0
+
+#define KPT 0
+#define KIT 0
+#define KDT 0
+
+#define GPR 0
+#define GIR 0
+#define GDR 0
+
+#define GPP 0
+#define GIP 0
+#define GDP 0
 
 #define altAlpha 0.9
 #define compliAlpha 0.98
@@ -156,13 +176,22 @@ void setup(){
 void loop(){
   HMC5883L mag;     
   ADXL345 accel;
-  ITG3200 gyro;
+  L3D4200D gyro;
   BMP180 baro;
   ORIENT_STRUCT orient;
   TARGET_STRUCT target;
+  OUTPUT_STRUCT output;
   PID_REGISTER channels;
   
+  channel1Cycle = 1520;
+  channel2Cycle = 1500;
+  channel3Cycle = 1500;
+  channel4Cycle = 1500;
+  channel5Cycle = 1500;
+  
   int RC_CONTROL_MODE = 0;
+  
+  bool MOTOR_EN = 0;
   
   unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, elevClockOld, landClockOld, controlClockOld;
   
@@ -171,13 +200,17 @@ void loop(){
   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
   baro.begin(BARO_MODE, altAlpha);
   
-  channels.rollPID.updateDefaults(kpr, kir, kdr, SERVO_MIDPOINT + ROLL_MAXIMUM, SERVO_MIDPOINT - ROLL_MAXIMUM, ROLL_OFFSET);
-  channels.pitchPID.updateDefaults(kpp, kip, kdp, SERVO_MIDPOINT + PITCH_MAXIMUM, SERVO_MIDPOINT - PITCH_MAXIMUM, PITCH_OFFSET);
-  channels.yawPID.updateDefaults(kpy, kiy, kdy, SERVO_MIDPOINT + YAW_MAXIMUM, SERVO_MIDPOINT - YAW_MAXIMUM, YAW_OFFSET);
+  channels.rsPID.updateDefaults(KPRS, KIRS, KDRS, 0, ROLL_STAB_MAXIMUM, -ROLL_STAB_MAXIMUM, ROLL_OFFSET);
+  channels.psPID.updateDefaults(KPPS, KIPS, KDPS, 0, PITCH_STAB_MAXIMUM, -PITCH_STAB_MAXIMUM, PITCH_OFFSET);
+  channels.ysPID.updateDefaults(KPYS, KIYS, KDYS, 0, YAW_STAB_MAXIMUM, -YAW_STAB_MAXIMUM, 0);
   
-  channels.autoRollPID.updateDefaults(gpr, gir, gdr, SERVO_MIDPOINT + GPS_ROLL_MAXIMUM, SERVO_MIDPOINT - GPS_ROLL_MAXIMUM, 0);
-  channels.autoPitchPID.updateDefaults(gpp, gip, gdp, SERVO_MIDPOINT + GPS_PITCH_MAXIMUM, SERVO_MIDPOINT - GPS_PITCH_MAXIMUM, 0);
-  channels.autoThrottlePID.updateDefaults(kpt, kit, kdt, THROTTLE_MAXIMUM, -THROTTLE_MAXIMUM, 0);
+  channels.rrPID.updateDefaults(KPRR, KIRR, KDRR, 0, ROLL_RATE_MAXIMUM, -ROLL_RATE_MAXIMUM, 0);
+  channels.prPID.updateDefaults(KPPR, KIPR, KDPR, 0, PITCH_RATE_MAXIMUM, -PITCH_RATE_MAXIMUM, 0);
+  channels.yrPID.updateDefaults(KPYR, KIYR, KDYR, 0, YAW_RATE_MAXIMUM, -YAW_RATE_MAXIMUM, 0);
+  
+  channels.arPID.updateDefaults(GPR, GIR, GDR, 0, GPS_ROLL_MAXIMUM, -GPS_ROLL_MAXIMUM, 0);
+  channels.apPID.updateDefaults(GPP, GIP, GDP, 0, GPS_PITCH_MAXIMUM, -GPS_PITCH_MAXIMUM, 0);
+  channels.atPID.updateDefaults(KPT, KIT, KDT, 0, THROTTLE_MAXIMUM, -THROTTLE_MAXIMUM, 0);
   
   gyro.calibrate();
   
@@ -212,10 +245,15 @@ void loop(){
     }
     
     updateMode(channels, target, orient, RC_CONTROL_MODE);
-    updateController(channels, target, orient, RC_CONTROL_MODE, controlClockOld);
+    
+    checkArming(MOTOR_EN);
+    if (MOTOR_EN || AUXILIARY_EN){
+      updateController(channels, target, orient, output, RC_CONTROL_MODE, controlClockOld);
+    }
     
     //Status Feedback
-    transmitData(orient, baro, commClockOld); 
+    transmitData(orient, baro, output, commClockOld); 
+    
   } 
 }
 
@@ -225,7 +263,7 @@ void initAngles(struct ORIENT_STRUCT &orient, class ADXL345 &acc){
   orient.pitch = atan2(-acc.x, acc.z)*(180 / PI) + PITCH_OFFSET;
 }
 
-void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
+void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
   if ((millis() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
@@ -235,10 +273,14 @@ void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, s
   }
 }
  
-void compli(class ITG3200 &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
+void compli(class L3D4200D &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
   gyro.update();
   accel.update();
+  
+  orient.rollGyro = gyro.x;
+  orient.pitchGyro = gyro.y;
+  orient.yawGyro = gyro.z;
   
   double cycle = (((millis() - compliClockOld)*1.0)/1000.0);
   
@@ -287,7 +329,7 @@ void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
   }
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class BMP180 baro, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, class BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      Serial.print("Roll: ");
      Serial.println(orient.roll);
@@ -297,77 +339,165 @@ void transmitData(struct ORIENT_STRUCT &orient, class BMP180 baro, unsigned long
      Serial.println(orient.yaw);
      Serial.print("Alt: ");
      Serial.println(baro.alt);
+     Serial.print("Roll G: ");
+     Serial.println(orient.rollGyro);
+     Serial.print("Pitch G: ");
+     Serial.println(orient.pitchGyro);
+     Serial.print("Yaw G: ");
+     Serial.println(orient.yawGyro);
+     Serial.print("Output R: ");
+     Serial.println(output.rollOutput);
+     Serial.print("Output P: ");
+     Serial.println(output.pitchOutput);
    
      commClockOld = millis();
    }
 }
 
-void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, int RC_CONTROL_MODE, unsigned long &controlClockOld){
+void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, struct OUTPUT_STRUCT &output, int RC_CONTROL_MODE, unsigned long &controlClockOld){
    if ((millis() - controlClockOld) >= CONTROL_DELAY){
-     double cycle = millis() - controlClockOld;
-     double output1, output2, output3, output4;
+     double cycle = (millis() - controlClockOld) * 0.001;
      
-     double rollSensor = newMap(orient.roll, -90, 90, 1000, 2000);
-     double pitchSensor = newMap(orient.pitch, -90, 90, 1000, 2000);
-     double yawSensor = newMap(orient.pitch, -180, 180, 1000, 2000);
+     double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     double yawChannel = newMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     
+     double errorLongitude;
+     double errorLatitude;
+     double errorRoll;
+     double errorPitch;
+     
+     if (GPS_EN){
+       errorLongitude = target.longitude - orient.longitude;
+       errorLatitude = target.latitude - orient.latitude;
+       errorRoll = (errorLongitude * cos(radians(orient.yaw)) + errorLatitude * sin(radians(orient.yaw)));
+       errorPitch = -(errorLatitude * cos(radians(orient.yaw)) + errorLongitude * sin(radians(orient.yaw)));
+       
+       channels.arPID.calc(errorRoll, 0, cycle);
+       channels.apPID.calc(errorPitch, 0, cycle);
+     }
      
      switch (RC_CONTROL_MODE){
        case 0:
            if (AUXILIARY_EN){
-             output1 = channel1Cycle;
-             output2 = channel2Cycle;
-             output3 = channel3Cycle;
-             output4 = channel4Cycle;
+             output.rollOutput = channel1Cycle;
+             output.pitchOutput = channel2Cycle;
+             output.throttleOutput = channel3Cycle;
+             output.yawOutput = channel4Cycle;
            } else {
              //channels.rollPID.calc(error, sensor, cycle);
+             if (ACRO_EN){
+               channels.rrPID.calc(rollChannel - orient.rollGyro, orient.rollGyro, cycle);
+               channels.prPID.calc(pitchChannel - orient.pitchGyro, orient.pitchGyro, cycle);
+             } else {
+               channels.rsPID.calc(rollChannel - orient.roll, orient.roll, cycle);
+               channels.psPID.calc(pitchChannel - orient.pitch, orient.pitch, cycle);
              
-             channels.rollPID.calc(channel1Cycle - rollSensor, rollSensor, cycle);
-             channels.pitchPID.calc(channel1Cycle - pitchSensor, pitchSensor, cycle);
-             channels.yawPID.calc(target.yawRate - yawSensor, yawSensor, cycle);
+               channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+               channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+             }
+               
+             channels.yrPID.calc(yawChannel - orient.yawGyro, orient.yawGyro, cycle);
              
-             output1 = channels.rollPID.getControl();
-             output2 = channels.pitchPID.getControl();
-             output3 = channel3Cycle;
-             output4 = channels.yawPID.getControl();
+             output.rollOutput = channels.rrPID.getControl();
+             output.pitchOutput = channels.prPID.getControl();
+             output.throttleOutput = channel3Cycle;
+             output.yawOutput = channels.yrPID.getControl();
            }
            break;
        case 1:
+           channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
+           channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
+           channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
+             
+           channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+           channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+           channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
            
+           channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
+           
+           if (AUXILIARY_EN){
+             //ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
+           } else {
+             output.rollOutput = channels.rrPID.getControl();
+             output.pitchOutput = channels.prPID.getControl();
+             output.throttleOutput = channels.atPID.getControl();
+             output.yawOutput = channels.yrPID.getControl();
+           }
            break;
        case 2:
-       
+           channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
+           channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
+           channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
+             
+           channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+           channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+           channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
+           
+           channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
+           
+           if (AUXILIARY_EN){
+             //ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
+           } else {
+             output.rollOutput = channels.rrPID.getControl();
+             output.pitchOutput = channels.prPID.getControl();
+             output.throttleOutput = channels.atPID.getControl();
+             output.yawOutput = channels.yrPID.getControl();
+           }
            break;
      }
      
-     processMotors();
+     processMotors(output);
      
      controlClockOld = millis(); 
    }
 }
 
-void processMotors(){
-  if (QUAD_EN){
-    
-  } else if (TRI_EN){
-    
-  }
+void processMotors(struct OUTPUT_STRUCT output){
   
+    if (QUAD_EN){
+    
+    } else if (TRI_EN){
+    
+      if (output.throttleOutput > THROTTLE_CUTOFF){
+        int op1 = output.throttleOutput + output.rollOutput - 0.5 * output.pitchOutput;
+        int op2 = output.throttleOutput - output.rollOutput - 0.5 * output.pitchOutput;
+        int op3 = output.throttleOutput + output.pitchOutput;
+        int op4 = SERVO_MIDPOINT + output.yawOutput;
+      
+        withinBounds(op1, SERVO_MAXIMUM, SERVO_MINIMUM);
+        withinBounds(op2, SERVO_MAXIMUM, SERVO_MINIMUM);
+        withinBounds(op3, SERVO_MAXIMUM, SERVO_MINIMUM);
+        withinBounds(op4, SERVO_MAXIMUM, SERVO_MINIMUM);
+      
+        output1.writeMicroseconds(op1);
+        output2.writeMicroseconds(op2);
+        output3.writeMicroseconds(op3);
+        output4.writeMicroseconds(op4);
+      }
+    }
 }
 
 void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, int &RC_CONTROL_MODE){
+  
+  double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+  double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     
   if (channel5Cycle < 1300){
     if (RC_CONTROL_MODE != 1){
       target.alt = waypoint[target.waypointCounter + 2];
       target.intAlt = orient.alt;
-      channels.autoThrottlePID.setIntegral(channel3Cycle);
-      channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
-      channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
-      channels.autoRollPID.setIntegral(channel1Cycle);
-      channels.autoPitchPID.setIntegral(channel2Cycle);
+      channels.atPID.setIntegral(channel3Cycle);
+      //channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
+      //channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
+      channels.arPID.setIntegral(rollChannel);
+      channels.apPID.setIntegral(pitchChannel);
     }
     
     if (GPS_EN && orient.GPS_LOCK){
       target.yaw = int(TinyGPSPlus::courseTo(orient.latitude,orient.longitude,waypoint[target.waypointCounter],waypoint[target.waypointCounter + 1]));
+      target.latitude = waypoint[target.waypointCounter];
+      target.longitude = waypoint[target.waypointCounter + 1];
     } else {
       target.yaw = orient.yaw;
     }
@@ -376,14 +506,7 @@ void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, str
     
   } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
     if (RC_CONTROL_MODE != 0){
-      target.yawRate = orient.yaw;
-    }
-    
-    target.yawRate += (channel4Cycle - SERVO_MIDPOINT) * YAW_RATE;
-    if (target.yawRate > SERVO_MAXIMUM){
-      target.yawRate = SERVO_MAXIMUM;
-    } else if (target.yawRate < SERVO_MINIMUM){
-      target.yawRate = SERVO_MINIMUM;
+      
     }
     
     RC_CONTROL_MODE = 0;
@@ -392,11 +515,11 @@ void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, str
     if (RC_CONTROL_MODE != 2){
       target.alt = orient.alt;
       target.intAlt = orient.alt;
-      channels.autoThrottlePID.setIntegral(channel3Cycle);
-      channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
-      channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
-      channels.autoRollPID.setIntegral(channel1Cycle);
-      channels.autoPitchPID.setIntegral(channel2Cycle);
+      channels.atPID.setIntegral(channel3Cycle);
+      //channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
+      //channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
+      channels.arPID.setIntegral(rollChannel);
+      channels.apPID.setIntegral(pitchChannel);
       target.latitude = orient.latitude;
       target.longitude = orient.longitude;
       target.yaw = orient.yaw;
@@ -455,6 +578,23 @@ void channel6Interrupt(){
   }
 }
 
-int newMap(int inValue, int inLow, int inHigh, int outLow, int outHigh){
+double newMap(int inValue, int inLow, int inHigh, int outLow, int outHigh){
   return ((inValue - inLow) * (1.0 * (outHigh - outLow)) / (1.0 * (inHigh - inLow)) + outLow);
+}
+
+void withinBounds(int &value, int upper, int lower){
+  if (value > upper){value = upper;}
+  if (value < lower){value = lower;}
+}
+
+void checkArming(bool &MOTOR_EN){
+  if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle >= ARM_ENGAGE_THRESHOLD){
+      MOTOR_EN = 1;
+      digitalWrite(13,HIGH);
+      
+  } else if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_DISENGAGE_THRESHOLD){
+      MOTOR_EN = 0;
+      digitalWrite(13,LOW);
+  }
+  //Perhaps Add PID DISABLE Code Here
 }
