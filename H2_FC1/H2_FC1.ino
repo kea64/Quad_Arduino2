@@ -42,13 +42,20 @@
 #define GPS_ROLL_MAXIMUM 20
 #define GPS_PITCH_MAXIMUM 20
 #define ACC_SCALAR 0.93
-#define ARM_ENGAGE_THRESHOLD 1200
-#define ARM_DISENGAGE_THRESHOLD 1900
+#define ARM_ENGAGE_THRESHOLD 1190
+#define ARM_DISENGAGE_THRESHOLD 1840
 #define ARM_THROTTLE_THRESHOLD 1210
 #define GPS_SATELLITE_MINIMUM 5
 #define SERVO_MAXIMUM 2000
 #define SERVO_MIDPOINT 1500
 #define SERVO_MINIMUM 1000
+#define TAIL_SERVO_MAX_DEGREE 70
+#define TAIL_SERVO_MIN_DEGREE 120
+#define TAIL_SERVO_MAX 1920
+#define TAIL_SERVO_MIN 1168
+#define TAIL_SERVO_OFFSET 5
+#define DIV_BY_MILL 0.001
+#define INITIAL_ARM_DELAY 3000
 
 #define DEBUG_EN 1
 #define GPS_EN 0
@@ -57,34 +64,34 @@
 #define QUAD_EN 0 //Choose only 1 Frame. Defaults to Quad.
 #define TRI_EN 1
 
-#define KPRS 1.75
+#define KPRS 0.55
 #define KIRS 0
 #define KDRS 0
-#define KMRS 50
+#define KMRS 25
 
-#define KPRR 0.8
-#define KIRR 0.15
-#define KDRR 0.04
-#define KMRR 50
+#define KPRR 0.6
+#define KIRR 1
+#define KDRR 0
+#define KMRR 80
 
-#define KPPS 1.75
+#define KPPS 0.55
 #define KIPS 0
 #define KDPS 0
-#define KMPS 50
+#define KMPS 25
 
-#define KPPR 0.8
-#define KIPR 0.15
-#define KDPR 0.04
-#define KMPR 50
+#define KPPR 0.6
+#define KIPR 1
+#define KDPR 0
+#define KMPR 80
 
 #define KPYS 0
 #define KIYS 0
 #define KDYS 0
 #define KMYS 25
 
-#define KPYR 0
+#define KPYR 3
 #define KIYR 0
-#define KDYR 0.02
+#define KDYR 0
 #define KMYR 25
 
 #define KPT 0
@@ -103,16 +110,25 @@
 #define GMP 25
 
 #define altAlpha 0.9
-#define compliAlpha 0.98
+#define compliAlpha 0.97
+#define GYROALPHA 0.85
+#define ACC_ALPHA 0.25
 
 #define BARO_MODE 3
 
-#define COMPLI_DELAY 1
+#define COMPLI_DELAY 200
 #define BARO_DELAY 50
 #define TEMP_DELAY 2000
 #define COMM_DELAY 250
-#define CONTROL_DELAY 1
+#define CONTROL_DELAY 200
 #define MODE_DELAY 20
+
+//#define COMPLI_DELAY 1
+//#define BARO_DELAY 50
+//#define TEMP_DELAY 2000
+//#define COMM_DELAY 250
+//#define CONTROL_DELAY 1
+//#define MODE_DELAY 20
 
 #define aileronPin A3
 #define elevatorPin A2
@@ -139,6 +155,8 @@ volatile int channel3Cycle;
 volatile int channel4Cycle;
 volatile int channel5Cycle;
 volatile int channel6Cycle;
+
+int count = 0;
 
 unsigned long channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
@@ -204,14 +222,14 @@ void loop(){
   //channel4Cycle = 1500;
   //channel5Cycle = 1500;
   
-  int RC_CONTROL_MODE = 0;
+  byte RC_CONTROL_MODE = 0;
   
   bool MOTOR_EN = 0;
   
-  unsigned long compliClockNew, compliClockOld, baroClockOld, tempClockOld, commClockOld, controlClockOld, modeClockOld;
+  unsigned long compliClockOld, baroClockOld, tempClockOld, commClockOld, controlClockOld, modeClockOld;
   
-  gyro.init();
-  accel.init();
+  gyro.init(GYROALPHA);
+  accel.init(ACC_ALPHA);
   mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
   baro.begin(BARO_MODE, altAlpha);
   
@@ -230,6 +248,8 @@ void loop(){
     channels.apPID.updateDefaults(GPP, GIP, GDP, 0, GPS_PITCH_MAXIMUM, -GPS_PITCH_MAXIMUM, GMP);
   }
   
+  delay(500);
+  
   gyro.calibrate();
   
   initAngles(orient, accel);
@@ -240,11 +260,11 @@ void loop(){
   target.yaw = orient.yaw;
   
   //Reset State Control Timers
-  compliClockOld = millis();
+  compliClockOld = micros();
   baroClockOld = millis();
   tempClockOld = millis();
   commClockOld = millis();
-  controlClockOld = millis();
+  controlClockOld = micros();
   modeClockOld = millis();
   
 //_______________________________________________________________________// 
@@ -288,11 +308,11 @@ void initAngles(struct ORIENT_STRUCT &orient, class ADXL345 &acc){
 
 void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
-  if ((millis() - compliClockOld) >= COMPLI_DELAY){
+  if ((micros() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
     calcYaw(mag, orient, ROLL_OFFSET, PITCH_OFFSET, YAW_OFFSET); //Tilt Compensated Compass Code
     
-    compliClockOld = millis();
+    compliClockOld = micros();
   }
 }
  
@@ -305,7 +325,7 @@ void compli(class L3D4200D &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &or
   orient.pitchGyro = gyro.y;
   orient.yawGyro = gyro.z;
   
-  double cycle = (millis() - compliClockOld) * 0.001;
+  double cycle = (micros() - compliClockOld) * 0.000001;
   
   double pitchAccel = atan2(-accel.x,accel.z)*(180.0/PI)*ACC_SCALAR + PITCH_OFFSET;
   orient.pitch = compliAlpha * (orient.pitch + (gyro.y) * cycle) + (1 - compliAlpha) * pitchAccel;
@@ -346,10 +366,15 @@ void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
   }
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
      if (DEBUG_EN){
+       //Serial.print(orient.roll);
+       //Serial.print(" ");
+       //Serial.print(gyro.x);
+       //Serial.print(" ");
+       //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
        
        Serial.print("Roll: ");
        Serial.println(orient.roll);
@@ -385,24 +410,26 @@ void transmitData(struct ORIENT_STRUCT &orient, class BMP180 baro, struct OUTPUT
        Serial.println(channel4Cycle);
        Serial.print("CH6VAR ");
        Serial.println(channel6Var);
+       Serial.println(count);
        
      }
+     count = 0;
      commClockOld = millis();
    }
 }
 
-void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, struct OUTPUT_STRUCT &output, int RC_CONTROL_MODE, unsigned long &controlClockOld){
-   if ((millis() - controlClockOld) >= CONTROL_DELAY){
-     double cycle = (millis() - controlClockOld) * 0.001;
+void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, struct OUTPUT_STRUCT &output, byte RC_CONTROL_MODE, unsigned long &controlClockOld){
+   if ((micros() - controlClockOld) >= CONTROL_DELAY){
+     double cycle = (micros() - controlClockOld) * 0.000001;
+     count += 1;
      
-     //Serial.println("1");
+     channel6Var = newMap(channel6Cycle, 1000, 2000, 0, 2);
+     channels.rsPID.updateGain(channel6Var, 0, 0);
+     channels.psPID.updateGain(channel6Var, 0, 0);
      
-     channel6Var = newMap(channel6Cycle, 1000, 2000, 0, 5);
-     channels.yrPID.updateGain(channel6Var, 0, KDYR);
-     
-     double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -40, 40);
-     double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 40, -40);
-     double yawChannel = newMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -50, 50);
+     double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -45, 45);
+     double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 45, -45);
+     double yawChannel = newMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
      
      double errorLongitude;
      double errorLatitude;
@@ -434,7 +461,9 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
              } else if(channel3Cycle >= THROTTLE_CUTOFF) {
                channels.rsPID.calc(rollChannel - orient.roll, orient.roll, cycle);
                channels.psPID.calc(pitchChannel - orient.pitch, orient.pitch, cycle);
-             
+               
+               count = channels.psPID.getControl();
+               
                channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
                channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
              }
@@ -492,7 +521,7 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
      
      processMotors(output);
      
-     controlClockOld = millis(); 
+     controlClockOld = micros(); 
    }
 }
 
@@ -501,13 +530,16 @@ void processMotors(struct OUTPUT_STRUCT output){
     if (QUAD_EN){
     
     } else if (TRI_EN){
-    
       
-        int op1 = output.throttle + output.roll - 0.7 * output.pitch;
-        int op2 = output.throttle - output.roll - 0.7 * output.pitch;
+        int op1 = output.throttle + output.roll - 0.8 * output.pitch;
+        int op2 = output.throttle - output.roll - 0.8 * output.pitch;
         int op3 = output.throttle + output.pitch;
         int op4 = SERVO_MIDPOINT + output.yaw;
       
+        double tailConv = newMap(op4, TAIL_SERVO_MIN, TAIL_SERVO_MAX, TAIL_SERVO_MIN_DEGREE, TAIL_SERVO_MAX_DEGREE) - TAIL_SERVO_OFFSET;
+        
+        op3 = ((op3 - SERVO_MINIMUM) / sin(radians(tailConv))) + SERVO_MINIMUM;
+        
         withinBounds(op1, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
         withinBounds(op2, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
         withinBounds(op3, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
@@ -517,17 +549,17 @@ void processMotors(struct OUTPUT_STRUCT output){
           output1.writeMicroseconds(op1);
           output2.writeMicroseconds(op2);
           output3.writeMicroseconds(op3);
-          //output4.writeMicroseconds(op4);
+          output4.writeMicroseconds(op4);
         } else {
           output1.writeMicroseconds(1188);
           output2.writeMicroseconds(1188);
           output3.writeMicroseconds(1188);
-          //output4.writeMicroseconds(op4);
+          output4.writeMicroseconds(SERVO_MIDPOINT);
         }
     }
 }
 
-void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, int &RC_CONTROL_MODE, unsigned long &modeClockOld){
+void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, byte &RC_CONTROL_MODE, unsigned long &modeClockOld){
   if (millis() - modeClockOld > MODE_DELAY){
     double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
     double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
@@ -638,7 +670,7 @@ void withinBounds(int &value, int upper, int lower){
 }
 
 void checkArming(bool &MOTOR_EN){
-  if (millis() > 3000){
+  if (millis() > INITIAL_ARM_DELAY){
     if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_ENGAGE_THRESHOLD && channel3Cycle > 100 && channel4Cycle > 100){
       MOTOR_EN = 1;
       digitalWrite(13,HIGH);
