@@ -35,7 +35,7 @@
 #define PITCH_STAB_MAXIMUM 400
 #define YAW_STAB_MAXIMUM 300
 #define THROTTLE_MAXIMUM 1864
-#define THROTTLE_MINIMUM 1188
+#define THROTTLE_MINIMUM 1136
 #define AUTO_THROTTLE_MAXIMUM 1700
 #define AUTO_THROTTLE_MINIMUM 1300
 #define THROTTLE_CUTOFF 1250
@@ -44,7 +44,7 @@
 #define ACC_SCALAR 0.93
 #define ARM_ENGAGE_THRESHOLD 1190
 #define ARM_DISENGAGE_THRESHOLD 1840
-#define ARM_THROTTLE_THRESHOLD 1210
+#define ARM_THROTTLE_THRESHOLD 1180
 #define GPS_SATELLITE_MINIMUM 5
 #define SERVO_MAXIMUM 2000
 #define SERVO_MIDPOINT 1500
@@ -60,9 +60,9 @@
 #define DEBUG_EN 1
 #define GPS_EN 0
 #define AUXILIARY_EN 0
-#define ACRO_EN 0
-#define QUAD_EN 0 //Choose only 1 Frame. Defaults to Quad.
-#define TRI_EN 1
+#define ACRO_EN 1
+#define QUAD_EN 1 //Choose only 1 Frame. Defaults to Quad.
+#define TRI_EN 0
 
 #define KPRS 1
 #define KIRS 0
@@ -119,7 +119,7 @@
 #define COMPLI_DELAY 200
 #define BARO_DELAY 50
 #define TEMP_DELAY 2000
-#define COMM_DELAY 50
+#define COMM_DELAY 250
 #define CONTROL_DELAY 200
 #define MODE_DELAY 20
 
@@ -204,7 +204,7 @@ void loop(){
   
   HMC5883L mag;     
   ADXL345 accel;
-  L3D4200D gyro;
+  ITG3200 gyro;
   BMP180 baro;
   ORIENT_STRUCT orient;
   TARGET_STRUCT target;
@@ -288,10 +288,10 @@ void loop(){
     if (MOTOR_EN || AUXILIARY_EN){
       updateController(channels, target, orient, output, RC_CONTROL_MODE, controlClockOld);
     } else {
-      output1.writeMicroseconds(1188);
-      output2.writeMicroseconds(1188);
-      output3.writeMicroseconds(1188);
-      output4.write(90);
+      output1.writeMicroseconds(THROTTLE_MINIMUM);
+      output2.writeMicroseconds(THROTTLE_MINIMUM);
+      output3.writeMicroseconds(THROTTLE_MINIMUM);
+      output4.writeMicroseconds(THROTTLE_MINIMUM);
     }
     
     //Status Feedback
@@ -306,7 +306,7 @@ void initAngles(struct ORIENT_STRUCT &orient, class ADXL345 &acc){
   orient.pitch = atan2(-acc.x, acc.z)*(180 / PI) + PITCH_OFFSET;
 }
 
-void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
+void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
    //Main Sensor Reading and Motor Control
   if ((micros() - compliClockOld) >= COMPLI_DELAY){
     compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
@@ -316,7 +316,7 @@ void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, 
   }
 }
  
-void compli(class L3D4200D &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
+void compli(class ITG3200 &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
   //Complimentary Filter to Mix Gyro and Accelerometer Data
   gyro.update();
   accel.update();
@@ -376,7 +376,7 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        //Serial.print(" ");
        //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
        
-       /*
+       
        Serial.print("Roll: ");
        Serial.println(orient.roll);
        Serial.print("Pitch: ");
@@ -393,7 +393,7 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        Serial.print("Yaw G: ");
        Serial.println(orient.yawGyro);
        
-       */
+       
        
        Serial.print("Output R: ");
        Serial.println(output.roll);
@@ -534,7 +534,27 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
 void processMotors(struct OUTPUT_STRUCT output){
   
     if (QUAD_EN){
-    
+        int op1 = output.throttle + output.roll - output.pitch + output.yaw;
+        int op2 = output.throttle - output.roll - output.pitch - output.yaw;
+        int op3 = output.throttle - output.roll + output.pitch + output.yaw;
+        int op4 = output.throttle + output.roll + output.pitch - output.yaw;
+        
+        withinBounds(op1, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
+        withinBounds(op2, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
+        withinBounds(op3, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
+        withinBounds(op4, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
+        
+        if (output.throttle > THROTTLE_CUTOFF){
+          output1.writeMicroseconds(op1);
+          output2.writeMicroseconds(op2);
+          output3.writeMicroseconds(op3);
+          output4.writeMicroseconds(op4);
+        } else {
+          output1.writeMicroseconds(THROTTLE_MINIMUM);
+          output2.writeMicroseconds(THROTTLE_MINIMUM);
+          output3.writeMicroseconds(THROTTLE_MINIMUM);
+          output4.writeMicroseconds(THROTTLE_MINIMUM);
+        }
     } else if (TRI_EN){
       
         int op1 = output.throttle + output.roll - 0.8 * output.pitch;
@@ -557,10 +577,10 @@ void processMotors(struct OUTPUT_STRUCT output){
           output3.writeMicroseconds(op3);
           output4.writeMicroseconds(op4);
         } else {
-          output1.writeMicroseconds(1188);
-          output2.writeMicroseconds(1188);
-          output3.writeMicroseconds(1188);
-          output4.writeMicroseconds(SERVO_MIDPOINT);
+          output1.writeMicroseconds(THROTTLE_MINIMUM);
+          output2.writeMicroseconds(THROTTLE_MINIMUM);
+          output3.writeMicroseconds(THROTTLE_MINIMUM);
+          output4.writeMicroseconds(THROTTLE_MINIMUM);
         }
     }
 }

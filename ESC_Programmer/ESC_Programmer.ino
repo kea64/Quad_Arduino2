@@ -30,7 +30,7 @@ Servo output3;
 Servo output4;
 
 void setup(){
-   Serial.begin(38400); 
+   Serial.begin(115200); 
    
    pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Interrupt,CHANGE);
    pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Interrupt,CHANGE);
@@ -52,8 +52,10 @@ void loop(){
   output1.writeMicroseconds(channel3Cycle);
   output2.writeMicroseconds(channel3Cycle);
   output3.writeMicroseconds(channel3Cycle);
-  output4.writeMicroseconds(channel4Cycle);
+  output4.writeMicroseconds(channel3Cycle);
   
+  Serial.println(channel3Cycle);
+  delay(50);
 }
 
 void channel1Interrupt(){
