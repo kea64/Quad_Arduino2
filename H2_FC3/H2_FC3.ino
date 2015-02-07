@@ -5,6 +5,7 @@
 #include <Wire.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
+
 #include <H2_HMC5883L.h>
 #include <H2_ADXL345.h>
 #include <H2_ITG3200.h>
@@ -15,131 +16,9 @@
 #include <H2_Target.h>
 #include <H2_PID.h>
 #include <H2_Output.h>
+#include <H2_Drone_Values.h>
+#include <H2_Support.h>
 
-#define xMagError 0.96
-#define yMagError 1.01
-#define zMagError 0.95
-#define xMagOffset -23
-#define yMagOffset -102
-#define zMagOffset 0
-#define ROLL_OFFSET 0 
-#define PITCH_OFFSET 0 
-#define YAW_OFFSET 90
-#define ROLL_SENSITIVITY 0.5
-#define PITCH_SENSITIVITY 0.5
-#define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
-#define ROLL_RATE_MAXIMUM 350
-#define PITCH_RATE_MAXIMUM 350
-#define YAW_RATE_MAXIMUM 400
-#define ROLL_STAB_MAXIMUM 400
-#define PITCH_STAB_MAXIMUM 400
-#define YAW_STAB_MAXIMUM 300
-#define THROTTLE_MAXIMUM 1864
-#define THROTTLE_MINIMUM 1136
-#define AUTO_THROTTLE_MAXIMUM 1700
-#define AUTO_THROTTLE_MINIMUM 1300
-#define THROTTLE_CUTOFF 1180
-#define GPS_ROLL_MAXIMUM 20
-#define GPS_PITCH_MAXIMUM 20
-#define ACC_SCALAR 0.93
-#define ARM_ENGAGE_THRESHOLD 1250
-#define ARM_DISENGAGE_THRESHOLD 1775
-#define ARM_THROTTLE_THRESHOLD 1180
-#define GPS_SATELLITE_MINIMUM 5
-#define SERVO_MAXIMUM 2000
-#define SERVO_MIDPOINT 1500
-#define SERVO_MINIMUM 1000
-#define TAIL_SERVO_MAX_DEGREE 70
-#define TAIL_SERVO_MIN_DEGREE 120
-#define TAIL_SERVO_MAX 1920
-#define TAIL_SERVO_MIN 1168
-#define TAIL_SERVO_OFFSET 5
-#define DIV_BY_MILL 0.001
-#define INITIAL_ARM_DELAY 3000
-
-#define DEBUG_EN 1
-#define GPS_EN 0
-#define AUXILIARY_EN 0
-#define ACRO_EN 0
-#define QUAD_EN 1 //Choose only 1 Frame. Defaults to Quad.
-#define TRI_EN 0
-
-#define KPRS 1
-#define KIRS 0
-#define KDRS 0
-#define KMRS 25
-
-#define KPRR 0.582
-#define KIRR 2.59
-#define KDRR 0.032
-#define KMRR 25
-
-#define KPPS 1
-#define KIPS 0
-#define KDPS 0
-#define KMPS 25
-
-#define KPPR 0.582
-#define KIPR 2.59
-#define KDPR 0.032
-#define KMPR 25
-
-#define KPYS 0
-#define KIYS 0
-#define KDYS 0
-#define KMYS 25
-
-#define KPYR 1
-#define KIYR 0
-#define KDYR 0
-#define KMYR 25
-
-#define KPT 0
-#define KIT 0
-#define KDT 0
-#define KMT 25
-
-#define GPR 0
-#define GIR 0
-#define GDR 0
-#define GMR 25
-
-#define GPP 0
-#define GIP 0
-#define GDP 0
-#define GMP 25
-
-#define altAlpha 0.9
-#define compliAlpha 0.97
-#define GYROALPHA 0.85
-#define ACC_ALPHA 0.25
-
-#define BARO_MODE 3
-
-#define COMPLI_DELAY 200
-#define BARO_DELAY 50
-#define TEMP_DELAY 2000
-#define COMM_DELAY 250
-#define CONTROL_DELAY 200
-#define MODE_DELAY 20
-
-//#define COMPLI_DELAY 1
-//#define BARO_DELAY 50
-//#define TEMP_DELAY 2000
-//#define COMM_DELAY 250
-//#define CONTROL_DELAY 1
-//#define MODE_DELAY 20
-
-#define channel1Pin A3
-#define channel2Pin A2
-#define channel3Pin A1
-#define channel4Pin A0
-#define channel1 2
-#define channel2 3
-#define channel3 4
-#define channel4 5
-#define channel5 6
-#define channel6 7
 
 static const double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
                                   39.956952, -75.188233, 3.0,
@@ -158,7 +37,7 @@ volatile int channel6Cycle;
 
 int count = 0;
 
-unsigned long channel1Start,channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
+unsigned long channel1Start, channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
 double channel6Var = 0;
 
@@ -189,12 +68,6 @@ void setup(){
   
   pinMode(13,OUTPUT); //Satellite Lock Indicator and Arming Indicator
   digitalWrite(13,LOW);
-   
-//  gyro.init();
-//  accel.init();
-//  mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
-//  baro.begin(BARO_MODE, altAlpha);
-//  mode.init(0);
   
 }
 
@@ -215,12 +88,6 @@ void loop(){
   output.pitch = 0;
   output.throttle = 0;
   output.yaw = 0;
-  
-  //channel1Cycle = 1520;
-  //channel2Cycle = 1500;
-  //channel3Cycle = 1500;
-  //channel4Cycle = 1500;
-  //channel5Cycle = 1500;
   
   byte RC_CONTROL_MODE = 0;
   
@@ -376,7 +243,7 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        //Serial.print(" ");
        //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
        
-       /*
+       
        Serial.print("Roll: ");
        Serial.println(orient.roll);
        Serial.print("Pitch: ");
@@ -403,7 +270,7 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        Serial.println(output.throttle);
        Serial.print("Output Y: ");
        Serial.println(output.yaw);
-       */
+       
        /*
        Serial.print("Ch1: ");
        Serial.println(channel1Cycle);
@@ -414,16 +281,9 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        Serial.print("Ch4: ");
        Serial.println(channel4Cycle);
        */
-       //Serial.print("CH6VAR ");
-       //Serial.println(channel6Var);
-       //Serial.println(count);
-       
-       Serial.print("AccX:");
-       Serial.print(orient.rollGyro);
-       Serial.print("AccY:");
-       Serial.print(orient.pitchGyro);
-       Serial.print("AccZ:");
-       Serial.println(orient.yawGyro);
+       Serial.print("CH6VAR ");
+       Serial.println(channel6Var);
+       Serial.println(count);
        
      }
      count = 0;
@@ -436,13 +296,13 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
      double cycle = (micros() - controlClockOld) * 0.000001;
      count += 1;
      
-     channel6Var = newMap(channel6Cycle, 1000, 2000, 0, 2);
+     channel6Var = intMap(channel6Cycle, 1000, 2000, 0, 2);
      channels.rsPID.updateGain(channel6Var, 0, 0);
      channels.psPID.updateGain(channel6Var, 0, 0);
      
-     double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -45, 45);
-     double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 45, -45);
-     double yawChannel = newMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -45, 45);
+     double pitchChannel = intMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 45, -45);
+     double yawChannel = intMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
      
      double errorLongitude;
      double errorLatitude;
@@ -538,64 +398,10 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
    }
 }
 
-void processMotors(struct OUTPUT_STRUCT output){
-  
-    if (QUAD_EN){
-        int op1 = output.throttle + output.roll - output.pitch + output.yaw;
-        int op2 = output.throttle - output.roll - output.pitch - output.yaw;
-        int op3 = output.throttle - output.roll + output.pitch + output.yaw;
-        int op4 = output.throttle + output.roll + output.pitch - output.yaw;
-        
-        withinBounds(op1, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        withinBounds(op2, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        withinBounds(op3, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        withinBounds(op4, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        
-        if (output.throttle > THROTTLE_CUTOFF){
-          output1.writeMicroseconds(op1);
-          output2.writeMicroseconds(op2);
-          output3.writeMicroseconds(op3);
-          output4.writeMicroseconds(op4);
-        } else {
-          output1.writeMicroseconds(THROTTLE_MINIMUM);
-          output2.writeMicroseconds(THROTTLE_MINIMUM);
-          output3.writeMicroseconds(THROTTLE_MINIMUM);
-          output4.writeMicroseconds(THROTTLE_MINIMUM);
-        }
-    } else if (TRI_EN){
-      
-        int op1 = output.throttle + output.roll - 0.8 * output.pitch;
-        int op2 = output.throttle - output.roll - 0.8 * output.pitch;
-        int op3 = output.throttle + output.pitch;
-        int op4 = SERVO_MIDPOINT + output.yaw + 30;
-      
-        double tailConv = newMap(op4, TAIL_SERVO_MIN, TAIL_SERVO_MAX, TAIL_SERVO_MIN_DEGREE, TAIL_SERVO_MAX_DEGREE) - TAIL_SERVO_OFFSET;
-        
-        op3 = ((op3 - SERVO_MINIMUM) / sin(radians(tailConv))) + SERVO_MINIMUM;
-        
-        withinBounds(op1, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        withinBounds(op2, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        withinBounds(op3, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        withinBounds(op4, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
-        
-        if (output.throttle > THROTTLE_CUTOFF){
-          output1.writeMicroseconds(op1);
-          output2.writeMicroseconds(op2);
-          output3.writeMicroseconds(op3);
-          output4.writeMicroseconds(op4);
-        } else {
-          output1.writeMicroseconds(THROTTLE_MINIMUM);
-          output2.writeMicroseconds(THROTTLE_MINIMUM);
-          output3.writeMicroseconds(THROTTLE_MINIMUM);
-          output4.writeMicroseconds(THROTTLE_MINIMUM);
-        }
-    }
-}
-
 void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, byte &RC_CONTROL_MODE, unsigned long &modeClockOld){
   if (millis() - modeClockOld > MODE_DELAY){
-    double rollChannel = newMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
-    double pitchChannel = newMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+    double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+    double pitchChannel = intMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
      
     if (channel5Cycle < 1300){
       if (RC_CONTROL_MODE != 1){
@@ -643,63 +449,6 @@ void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, str
     
     modeClockOld = millis();
   }
-}
-  
-void channel1Interrupt(){
-  if (digitalRead(channel1) == 1){
-      channel1Start = micros();
-  } else {
-      channel1Cycle = micros() - channel1Start;
-  }
-}
-
-void channel2Interrupt(){
-  if (digitalRead(channel2) == 1){
-      channel2Start = micros();
-  } else {
-      channel2Cycle = micros() - channel2Start;
-  }
-}
-
-void channel3Interrupt(){
-  if (digitalRead(channel3) == 1){
-      channel3Start = micros();
-  } else {
-      channel3Cycle = micros() - channel3Start;
-  }
-}
-
-void channel4Interrupt(){
-  if (digitalRead(channel4) == 1){
-      channel4Start = micros();
-  } else {
-      channel4Cycle = micros() - channel4Start;
-  }
-}
-
-void channel5Interrupt(){
-  if (digitalRead(channel5) == 1){
-      channel5Start = micros();
-  } else {
-      channel5Cycle = micros() - channel5Start;
-  }
-}
-
-void channel6Interrupt(){
-  if (digitalRead(channel6) == 1){
-      channel6Start = micros();
-  } else {
-      channel6Cycle = micros() - channel6Start;
-  }
-}
-
-double newMap(int inValue, int inLow, int inHigh, int outLow, int outHigh){
-  return ((inValue - inLow) * (1.0 * (outHigh - outLow)) / (1.0 * (inHigh - inLow)) + outLow);
-}
-
-void withinBounds(int &value, int upper, int lower){
-  if (value > upper){value = upper;}
-  if (value < lower){value = lower;}
 }
 
 void checkArming(bool &MOTOR_EN){
