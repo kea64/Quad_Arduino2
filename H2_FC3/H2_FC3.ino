@@ -450,17 +450,3 @@ void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, str
     modeClockOld = millis();
   }
 }
-
-void checkArming(bool &MOTOR_EN){
-  if (millis() > INITIAL_ARM_DELAY){
-    if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_ENGAGE_THRESHOLD && channel3Cycle > 100 && channel4Cycle > 100){
-      MOTOR_EN = 1;
-      digitalWrite(13,HIGH);
-      
-    } else if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle >= ARM_DISENGAGE_THRESHOLD){
-      MOTOR_EN = 0;
-      digitalWrite(13,LOW);
-    }
-  }
-  //Perhaps Add PID DISABLE Code Here
-}
