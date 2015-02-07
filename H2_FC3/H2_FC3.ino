@@ -291,6 +291,7 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
    }
 }
 
+/*
 void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, struct OUTPUT_STRUCT &output, byte RC_CONTROL_MODE, unsigned long &controlClockOld){
    if ((micros() - controlClockOld) >= CONTROL_DELAY){
      double cycle = (micros() - controlClockOld) * 0.000001;
@@ -397,7 +398,9 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
      controlClockOld = micros(); 
    }
 }
+*/
 
+/*
 void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, byte &RC_CONTROL_MODE, unsigned long &modeClockOld){
   if (millis() - modeClockOld > MODE_DELAY){
     double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
@@ -450,3 +453,5 @@ void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, str
     modeClockOld = millis();
   }
 }
+
+*/
