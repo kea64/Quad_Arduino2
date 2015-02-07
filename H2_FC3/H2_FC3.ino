@@ -277,3 +277,165 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
    }
 }
 
+<<<<<<< HEAD
+=======
+void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target, struct ORIENT_STRUCT orient, struct OUTPUT_STRUCT &output, byte RC_CONTROL_MODE, unsigned long &controlClockOld){
+   if ((micros() - controlClockOld) >= CONTROL_DELAY){
+     double cycle = (micros() - controlClockOld) * 0.000001;
+     count += 1;
+     
+     channel6Var = intMap(channel6Cycle, 1000, 2000, 0, 2);
+     channels.rsPID.updateGain(channel6Var, 0, 0);
+     channels.psPID.updateGain(channel6Var, 0, 0);
+     
+     double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -45, 45);
+     double pitchChannel = intMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 45, -45);
+     double yawChannel = intMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     
+     double errorLongitude;
+     double errorLatitude;
+     double errorRoll;
+     double errorPitch;
+     
+     if (GPS_EN){
+       errorLongitude = target.longitude - orient.longitude;
+       errorLatitude = target.latitude - orient.latitude;
+       errorRoll = (errorLongitude * cos(radians(orient.yaw)) + errorLatitude * sin(radians(orient.yaw)));
+       errorPitch = -(errorLatitude * cos(radians(orient.yaw)) + errorLongitude * sin(radians(orient.yaw)));
+       
+       channels.arPID.calc(errorRoll, 0, cycle);
+       channels.apPID.calc(errorPitch, 0, cycle);
+     }
+     
+     switch (RC_CONTROL_MODE){
+       case 0:
+           if (AUXILIARY_EN){
+             output.roll = channel1Cycle;
+             output.pitch = channel2Cycle;
+             output.throttle = channel3Cycle;
+             output.yaw = channel4Cycle;
+           } else {
+             //channels.rollPID.calc(error, sensor, cycle);
+             if (ACRO_EN && channel3Cycle >= THROTTLE_CUTOFF){
+               channels.rrPID.calc(rollChannel - orient.rollGyro, orient.rollGyro, cycle);
+               channels.prPID.calc(pitchChannel - orient.pitchGyro, orient.pitchGyro, cycle);
+             } else if(channel3Cycle >= THROTTLE_CUTOFF) {
+               channels.rsPID.calc(rollChannel - orient.roll, orient.roll, cycle);
+               channels.psPID.calc(pitchChannel - orient.pitch, orient.pitch, cycle);
+               
+               count = channels.psPID.getControl();
+               
+               channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+               channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+             }
+             
+               
+             channels.yrPID.calc(yawChannel - orient.yawGyro, orient.yawGyro, cycle);
+             
+             output.roll = channels.rrPID.getControl();
+             output.pitch = channels.prPID.getControl();
+             output.throttle = channel3Cycle;
+             output.yaw = channels.yrPID.getControl();
+           }
+           break;
+       case 1:
+           channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
+           channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
+           channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
+             
+           channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+           channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+           channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
+           
+           channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
+           
+           if (AUXILIARY_EN){
+             //ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
+           } else {
+             output.roll = channels.rrPID.getControl();
+             output.pitch = channels.prPID.getControl();
+             output.throttle = channels.atPID.getControl();
+             output.yaw = channels.yrPID.getControl();
+           }
+           break;
+       case 2:
+           channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
+           channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
+           channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
+             
+           channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+           channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+           channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
+           
+           channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
+           
+           if (AUXILIARY_EN){
+             //ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
+           } else {
+             output.roll = channels.rrPID.getControl();
+             output.pitch = channels.prPID.getControl();
+             output.throttle = channels.atPID.getControl();
+             output.yaw = channels.yrPID.getControl();
+           }
+           break;
+     }
+     
+     processMotors(output);
+     
+     controlClockOld = micros(); 
+   }
+}
+
+void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, struct ORIENT_STRUCT &orient, byte &RC_CONTROL_MODE, unsigned long &modeClockOld){
+  if (millis() - modeClockOld > MODE_DELAY){
+    double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+    double pitchChannel = intMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+     
+    if (channel5Cycle < 1300){
+      if (RC_CONTROL_MODE != 1){
+        target.alt = waypoint[target.waypointCounter + 2];
+        channels.atPID.setIntegral(channel3Cycle);
+        //channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
+        //channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
+        channels.arPID.setIntegral(rollChannel);
+        channels.apPID.setIntegral(pitchChannel);
+      }
+    
+      if (GPS_EN && orient.GPS_LOCK){
+        target.yaw = int(TinyGPSPlus::courseTo(orient.latitude,orient.longitude,waypoint[target.waypointCounter],waypoint[target.waypointCounter + 1]));
+        target.latitude = waypoint[target.waypointCounter];
+        target.longitude = waypoint[target.waypointCounter + 1];
+      } else {
+        target.yaw = orient.yaw;
+      }
+    
+      RC_CONTROL_MODE = 1;
+    
+    } else if (channel5Cycle >= 1300 && channel5Cycle <= 1700){
+      if (RC_CONTROL_MODE != 0){
+      
+      }
+    
+      RC_CONTROL_MODE = 0;
+    
+    } else if (channel5Cycle > 1700){
+      if (RC_CONTROL_MODE != 2){
+        target.alt = orient.alt;
+        channels.atPID.setIntegral(channel3Cycle);
+        //channels.autoRollPID.updateBounds(channel1Cycle + GPS_ROLL_MAXIMUM, channel1Cycle - GPS_ROLL_MAXIMUM);
+        //channels.autoPitchPID.updateBounds(channel2Cycle + GPS_PITCH_MAXIMUM, channel2Cycle - GPS_PITCH_MAXIMUM);
+        channels.arPID.setIntegral(rollChannel);
+        channels.apPID.setIntegral(pitchChannel);
+        target.latitude = orient.latitude;
+        target.longitude = orient.longitude;
+        target.yaw = orient.yaw;
+      }
+    
+      RC_CONTROL_MODE = 2;
+    
+    }
+    
+    modeClockOld = millis();
+  }
+}
+>>>>>>> parent of b1b880e... H2_FC3 Controller & Mode Change Porting
