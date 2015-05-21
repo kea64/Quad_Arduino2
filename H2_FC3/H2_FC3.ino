@@ -21,13 +21,14 @@
 #include <H2_Controller.h>
 #include <H2_Mode.h>
 #include <H2_Filters.h>
+#include <H2_Check_Timing.h>
 
 double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
                                   39.956952, -75.188233, 3.0,
                                   39.957141, -75.188185, 3.0,
                                   39.957068, -75.188523, 3.0
                                                             };
-
+                                                            
 static const int numWaypoint = ((sizeof(waypoint)/sizeof(const double))/3)-1; 
 
 volatile int channel1Cycle;
@@ -49,6 +50,16 @@ Servo output3;
 Servo output4;
 
 TinyGPSPlus gps;
+
+//HMC5883L mag;
+//ADXL345 accel;
+//L3D4200D gyro;
+//ITG3200 gyro;
+//BMP180 baro;
+//ORIENT_STRUCT orient;
+//TARGET_STRUCT target;
+//OUTPUT_STRUCT output;
+//PID_REGISTER channels2;
 
 //-------------------------------SETUP-----------------------------------//
 
@@ -79,7 +90,8 @@ void loop(){
   
   HMC5883L mag;     
   ADXL345 accel;
-  ITG3200 gyro;
+  L3D4200D gyro;
+  //ITG3200 gyro;
   BMP180 baro;
   ORIENT_STRUCT orient;
   TARGET_STRUCT target;
@@ -129,11 +141,11 @@ void loop(){
   target.yaw = orient.yaw;
   
   //Reset State Control Timers
-  compliClockOld = micros();
+  compliClockOld = millis();
   baroClockOld = millis();
   tempClockOld = millis();
   commClockOld = millis();
-  controlClockOld = micros();
+  controlClockOld = millis();
   modeClockOld = millis();
   
 //_______________________________________________________________________// 
@@ -164,34 +176,9 @@ void loop(){
     }
     
     //Status Feedback
-    transmitData(orient, baro, output, commClockOld); 
+    transmitData(orient, accel, gyro, baro, output, commClockOld); 
     
   } 
-}
-
-void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
-   //Main Sensor Reading and Motor Control
-  if ((micros() - compliClockOld) >= COMPLI_DELAY){
-    compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
-    calcYaw(mag, orient); //Tilt Compensated Compass Code
-    
-    compliClockOld = micros();
-  }
-}
-
-void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient){
-   if ((millis() - baroClockOld) >= BARO_DELAY){
-    baro.updatePressure();
-    baro.calculateAltitude();
-    baroClockOld = millis();
-  }
-}
-
-void checkTemp(class BMP180 &baro, unsigned long &tempClockOld){
-   if ((millis() - tempClockOld) >= TEMP_DELAY){
-    baro.updateTemperature();
-    tempClockOld = millis();
-  }
 }
 
 void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
@@ -211,10 +198,31 @@ void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
   }
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D4200D &gyro,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
      if (DEBUG_EN){
+       
+       /*
+       Serial.print("AccX: ");
+       Serial.print(acc.x);
+       Serial.print(" AccY: ");
+       Serial.print(acc.y);
+       Serial.print(" AccZ: ");
+       Serial.print(acc.z);
+       
+       Serial.print(" GyroX: ");
+       Serial.print(gyro.x);
+       Serial.print(" GyroY: ");
+       Serial.print(gyro.y);
+       Serial.print(" GyroZ: ");
+       Serial.print(gyro.z);
+       
+       Serial.print(" Baro: ");
+       Serial.println(baro.alt);
+       
+       */
+       
        //Serial.print(orient.roll);
        //Serial.print(" ");
        //Serial.print(gyro.x);
@@ -231,13 +239,14 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        Serial.print("Alt: ");
        Serial.println(baro.alt);
      
+       /*
        Serial.print("Roll G: ");
        Serial.println(orient.rollGyro);
        Serial.print("Pitch G: ");
        Serial.println(orient.pitchGyro);
        Serial.print("Yaw G: ");
        Serial.println(orient.yawGyro);
-       
+    
        
        
        Serial.print("Output R: ");
@@ -249,7 +258,9 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        Serial.print("Output Y: ");
        Serial.println(output.yaw);
        
-       /*
+       */
+       
+       
        Serial.print("Ch1: ");
        Serial.println(channel1Cycle);
        Serial.print("Ch2: ");
@@ -258,7 +269,7 @@ void transmitData(struct ORIENT_STRUCT &orient, BMP180 baro, struct OUTPUT_STRUC
        Serial.println(channel3Cycle);
        Serial.print("Ch4: ");
        Serial.println(channel4Cycle);
-       */
+       
        Serial.print("CH6VAR ");
        Serial.println(channel6Var);
        Serial.println(count);
