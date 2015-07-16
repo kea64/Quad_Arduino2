@@ -14,7 +14,7 @@ extern volatile int channel3Cycle, channel4Cycle;
 
 void processMotors(struct OUTPUT_STRUCT output){
 
-	if (QUAD_EN){
+	if (SPYDER_EN){
 		int op1 = output.throttle + output.roll - output.pitch + output.yaw;
 		int op2 = output.throttle - output.roll - output.pitch - output.yaw;
 		int op3 = output.throttle - output.roll + output.pitch + output.yaw;

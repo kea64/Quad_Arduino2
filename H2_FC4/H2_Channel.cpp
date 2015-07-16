@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include "H2_Channel.h"
 #include "H2_Registers.h"
-#include "H2_ADXL345.h"
+#include "H2_Sensors.h"
 
 #define SERVO_OFFSET 1000
 #define SERVO_CONV 0.18

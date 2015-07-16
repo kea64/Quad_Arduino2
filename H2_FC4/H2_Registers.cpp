@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "H2_Registers.h"
-#include "H2_ADXL345.h"
+#include "H2_Sensors.h"
 
 void MODE_REGISTER::switchModes(){
 	switch (RC_CONTROL_MODE){

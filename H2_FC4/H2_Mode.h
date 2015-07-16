@@ -3,11 +3,7 @@
 
 #include <Arduino.h>
 #include <TinyGPS++.h>
-#include "H2_HMC5883L.h"
-#include "H2_ADXL345.h"
-#include "H2_ITG3200.h"
-#include "H2_L3D4200D.h"
-#include "H2_BMP180.h"
+#include "H2_Sensors.h"
 #include "H2_TiltComp.h"
 #include "H2_Orient.h"
 #include "H2_Target.h"
