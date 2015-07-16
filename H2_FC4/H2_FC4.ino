@@ -79,9 +79,20 @@ void setup(){
   output3.attach(channel3Pin);
   output4.attach(channel4Pin);
   
-  pinMode(13,OUTPUT); //Satellite Lock Indicator and Arming Indicator
-  digitalWrite(13,LOW);
+  //Indicator LED's ... To Be Assigned
+  pinMode(RED_LED, OUTPUT);
+  //Crius Board Only Feature
+  if(CRIUS){
+    pinMode(GREEN_LED, OUTPUT);
+    pinMode(BLUE_LED, OUTPUT);
+  }
   
+  digitalWrite(RED_LED, LOW);
+  //Crius Board Only Feature
+  if(CRIUS){
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(BLUE_LED, LOW);
+  }
 }
 
 //----------------------------MAIN/SETUP----------------------------------//
