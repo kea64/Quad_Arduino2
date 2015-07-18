@@ -32,6 +32,16 @@ void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, s
 	}
 }
 
+void checkCompli(class MPU6050 &mpu, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
+	//Main Sensor Reading and Motor Control
+	if ((millis() - compliClockOld) >= COMPLI_DELAY){
+		compli(mpu, orient, compliClockOld); //Complimentary Filter
+		calcYaw(mag, orient); //Tilt Compensated Compass Code
+
+		compliClockOld = millis();
+	}
+}
+
 void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient){
 	if ((millis() - baroClockOld) >= BARO_DELAY){
 		baro.updatePressure();

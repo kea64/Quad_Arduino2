@@ -23,4 +23,6 @@ struct ORIENT_STRUCT{
 
 void initAngles(struct ORIENT_STRUCT &orient, class ADXL345 &acc);
 
+void initAngles(struct ORIENT_STRUCT &orient, class MPU6050 &mpu);
+
 #endif

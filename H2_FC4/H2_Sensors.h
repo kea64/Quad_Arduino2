@@ -3,6 +3,37 @@
 
 #include "Arduino.h"
 
+class MPU6050{
+  public:
+    MPU6050();
+    void init(int gyroGain, int accelGain, int DLPF);
+    void readData();
+    void resetWake();
+    void setDLPF(int BW);
+    void setGains(int gyro, int accel);
+    void offsetCal();
+    
+    float temp;
+    float ax, ay, az;
+    float gx, gy, gz;
+    
+    float axr, ayr, azr;
+    float gxr, gyr, gzr;
+    
+  private: 
+    int accel_x_OC;
+    int accel_y_OC;
+    int accel_z_OC;
+    int gyro_x_OC;
+    int gyro_y_OC;
+    int gyro_z_OC;
+    
+    float accel_scale_fact;
+    float gyro_scale_fact;
+    
+    
+};
+
 class ADXL345{
 public:
 	void init(double accAlpha);

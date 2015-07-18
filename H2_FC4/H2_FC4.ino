@@ -1,5 +1,5 @@
-#define NO_PORTC_PINCHANGES
-#define NO_PORTB_PINCHANGES
+//#define NO_PORTC_PINCHANGES
+//#define NO_PORTB_PINCHANGES
 
 #include <Servo.h>
 #include <Wire.h>
@@ -61,7 +61,10 @@ TinyGPSPlus gps;
 
 void setup(){
   Wire.begin();
-  Serial.begin(115200);
+  Serial.begin(SERIAL0_BAUD);
+  #if (GPS_EN && GPS_SERIAL == 1)
+    Serial1.begin(SERIAL1_BAUD);
+  #endif
   
   pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Interrupt,CHANGE);
   pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Interrupt,CHANGE);
@@ -94,12 +97,26 @@ void setup(){
 //----------------------------MAIN/SETUP----------------------------------//
 
 void loop(){
+  //Sensor Selection
+  #if defined(MPU6050_EN)
+    MPU6050 mpu;
+  #endif
+  #if defined(HMC5883L_EN)
+    HMC5883L mag;
+  #endif
+  #if defined(ADXL345_EN)
+    ADXL345 accel;
+  #endif
+  #if defined(L3D4200D_EN)
+    L3D4200D gyro;
+  #endif
+  #if defined(ITG3200_EN)
+    ITG3200 gyro;
+  #endif
+  #if defined(BMP085_EN) || defined(BMP180_EN)
+    BMP180 baro;
+  #endif
   
-  HMC5883L mag;     
-  ADXL345 accel;
-  L3D4200D gyro;
-  //ITG3200 gyro;
-  BMP180 baro;
   ORIENT_STRUCT orient;
   TARGET_STRUCT target;
   OUTPUT_STRUCT output;
@@ -116,10 +133,22 @@ void loop(){
   
   unsigned long compliClockOld, baroClockOld, tempClockOld, commClockOld, controlClockOld, modeClockOld;
   
-  gyro.init(GYROALPHA);
-  accel.init(ACC_ALPHA);
-  mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
-  baro.begin(BARO_MODE, altAlpha);
+  //Sensor Initialization
+  #if defined(MPU6050_EN)
+    mpu.init(MPU6050_GYRO_GAIN, MPU6050_ACCEL_GAIN, MPU6050_DLPF);
+  #endif
+  #if defined(ITG3200_EN) || defined(L3D4200D_EN)
+    gyro.init(GYROALPHA);
+  #endif
+  #if defined(ADXL345_EN)
+    accel.init(ACC_ALPHA);
+  #endif
+  #if defined(HMC5883L_EN)
+    mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
+  #endif
+  #if defined(BMP180_EN) || defined(BMP085_EN)
+    baro.begin(BARO_MODE, altAlpha);
+  #endif
   
   channels.rsPID.updateDefaults(KPRS, KIRS, KDRS, 0, ROLL_STAB_MAXIMUM, -ROLL_STAB_MAXIMUM, KMRS);
   channels.psPID.updateDefaults(KPPS, KIPS, KDPS, 0, PITCH_STAB_MAXIMUM, -PITCH_STAB_MAXIMUM, KMPS);
@@ -138,9 +167,15 @@ void loop(){
   
   delay(500);
   
-  gyro.calibrate();
+  #if defined(ITG3200_EN) || defined(L3D4200D_EN)
+    gyro.calibrate();
+  #endif
   
-  initAngles(orient, accel);
+  #if defined(MPU6050_EN)
+    initAngles(orient, mpu);
+  #elif defined(ADXL345_EN)
+    initAngles(orient, accel);
+  #endif
   
   target.roll = ROLL_OFFSET;
   target.pitch = PITCH_OFFSET;
@@ -161,7 +196,12 @@ void loop(){
 
   while(1==1){
     //Sensor Updates
-    checkCompli(gyro, accel, mag, orient, compliClockOld);
+    #if defined(MPU6050_EN)
+      checkCompli(mpu, mag, orient, compliClockOld);
+    #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
+      checkCompli(gyro, accel, mag, orient, compliClockOld);
+    #endif
+    
     checkBaro(baro, baroClockOld, orient);
     checkTemp(baro, tempClockOld);
     
@@ -183,29 +223,133 @@ void loop(){
     }
     
     //Status Feedback
-    transmitData(orient, accel, gyro, baro, output, commClockOld); 
+    #if defined(MPU6050_EN)
+      transmitData(orient, mpu, baro, output, commClockOld);
+    #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
+      transmitData(orient, accel, gyro, baro, output, commClockOld); 
+    #endif
     
   } 
 }
 
 void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
-  while (Serial.available() > 0){
-    if (gps.encode(Serial.read())){
-      orient.latitude = gps.location.lat();
-      orient.longitude = gps.location.lng();
+  #if (GPS_SERIAL == 0)
+    while (Serial.available() > 0){
+      if (gps.encode(Serial.read())){
+        orient.latitude = gps.location.lat();
+        orient.longitude = gps.location.lng();
       
-      if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
-        digitalWrite(13,HIGH);
-        orient.GPS_LOCK = 1;
-      } else {
-        digitalWrite(13,LOW);
-        orient.GPS_LOCK = 0;
+        if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
+          digitalWrite(13,HIGH);
+          orient.GPS_LOCK = 1;
+        } else {
+          digitalWrite(13,LOW);
+          orient.GPS_LOCK = 0;
+        }
       }
     }
-  }
+  #elif (GPS_SERIAL == 1)
+    while (Serial1.available() > 0){
+      if (gps.encode(Serial1.read())){
+        orient.latitude = gps.location.lat();
+        orient.longitude = gps.location.lng();
+      
+        if (gps.satellites.value() >= GPS_SATELLITE_MINIMUM){ //GPS Lock Indicator
+          digitalWrite(13,HIGH);
+          orient.GPS_LOCK = 1;
+        } else {
+          digitalWrite(13,LOW);
+          orient.GPS_LOCK = 0;
+        }
+      }
+    }  
+  #endif
+  
 }
 
 void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D4200D &gyro,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
+   if ((millis() - commClockOld) >= COMM_DELAY){
+     
+     if (DEBUG_EN){
+       
+       /*
+       Serial.print("AccX: ");
+       Serial.print(acc.x);
+       Serial.print(" AccY: ");
+       Serial.print(acc.y);
+       Serial.print(" AccZ: ");
+       Serial.print(acc.z);
+       
+       Serial.print(" GyroX: ");
+       Serial.print(gyro.x);
+       Serial.print(" GyroY: ");
+       Serial.print(gyro.y);
+       Serial.print(" GyroZ: ");
+       Serial.print(gyro.z);
+       
+       Serial.print(" Baro: ");
+       Serial.println(baro.alt);
+       
+       */
+       
+       //Serial.print(orient.roll);
+       //Serial.print(" ");
+       //Serial.print(gyro.x);
+       //Serial.print(" ");
+       //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
+       
+       
+       Serial.print("Roll: ");
+       Serial.println(orient.roll);
+       Serial.print("Pitch: ");
+       Serial.println(orient.pitch);
+       Serial.print("Yaw: ");
+       Serial.println(orient.yaw);
+       Serial.print("Alt: ");
+       Serial.println(baro.alt);
+     
+       /*
+       Serial.print("Roll G: ");
+       Serial.println(orient.rollGyro);
+       Serial.print("Pitch G: ");
+       Serial.println(orient.pitchGyro);
+       Serial.print("Yaw G: ");
+       Serial.println(orient.yawGyro);
+    
+       
+       
+       Serial.print("Output R: ");
+       Serial.println(output.roll);
+       Serial.print("Output P: ");
+       Serial.println(output.pitch);
+       Serial.print("Output T: ");
+       Serial.println(output.throttle);
+       Serial.print("Output Y: ");
+       Serial.println(output.yaw);
+       
+       */
+       
+       
+       Serial.print("Ch1: ");
+       Serial.println(channel1Cycle);
+       Serial.print("Ch2: ");
+       Serial.println(channel2Cycle);
+       Serial.print("Ch3: ");
+       Serial.println(channel3Cycle);
+       Serial.print("Ch4: ");
+       Serial.println(channel4Cycle);
+       
+       Serial.print("CH6VAR ");
+       Serial.println(channel6Var);
+       Serial.println(count);
+       
+     }
+     count = 0;
+     commClockOld = millis();
+   }
+}
+
+void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
      if (DEBUG_EN){

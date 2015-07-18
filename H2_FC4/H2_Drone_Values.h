@@ -1,19 +1,55 @@
 #ifndef H2_Drone_Values_h
 #define H2_Drone_Values_h
 
-#define QUAD_EN 1
+//Board Choice
+#define CRIUS 1
+#define NANO 0
+
+//Drone Choice
+#define SPYDER_EN 1
 #define TRI_EN 0
 
-#define channel1Pin A3
-#define channel2Pin A2
-#define channel3Pin A1
-#define channel4Pin A0
-#define channel1 2
-#define channel2 3
-#define channel3 4
-#define channel4 5
-#define channel5 6
-#define channel6 7
+//Sensor Choice
+#define MPU6050_EN
+//#define ADXL345_EN
+//#define ITG3200_EN
+//#define L3D4200D_EN
+#define HMC5883L_EN
+#define BMP085_EN
+//#define BMP180_EN
+
+#if (NANO)
+  #define channel1Pin A3
+  #define channel2Pin A2
+  #define channel3Pin A1
+  #define channel4Pin A0
+  #define channel1 2
+  #define channel2 3
+  #define channel3 4
+  #define channel4 5
+  #define channel5 6
+  #define channel6 7
+  #define GPS_SERIAL 0
+#elif (CRIUS)
+  #define channel1Pin A3
+  #define channel2Pin A2
+  #define channel3Pin A1
+  #define channel4Pin A0
+  #define channel1 15
+  #define channel2 10
+  #define channel3 14
+  #define channel4 11
+  #define channel5 12
+  #define channel6 13
+  #define GPS_SERIAL 1
+#endif
+
+#define SERIAL0_BAUD 115200
+#define SERIAL1_BAUD 38400
+
+#define BLUE_LED 31
+#define GREEN_LED 30
+#define RED_LED 13
 
 #define GPS_SATELLITE_MINIMUM 5
 #define DIV_BY_MILL 0.001
@@ -22,10 +58,15 @@
 #define INITIAL_ARM_DELAY 3000
 
 #define DEBUG_EN 1
-#define GPS_EN 0
+#define GPS_EN 1
 #define AUXILIARY_EN 0
 #define ACRO_EN 1
 
+#if defined(MPU6050_EN)
+  #define MPU6050_GYRO_GAIN 1
+  #define MPU6050_ACCEL_GAIN 1
+  #define MPU6050_DLPF 3
+#endif
 #define altAlpha 0.9
 #define compliAlpha 0.97
 #define dAlpha 0.5
@@ -49,7 +90,7 @@
 
 
 //Quadcopter Specific Settings
-#if QUAD_EN
+#if SPYDER_EN
 //Old Sensor Board
 //#define xMagError 0.96
 //#define yMagError 1.01

@@ -50,3 +50,22 @@ void compli(class ITG3200 &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &ori
 	//orient.roll = compliAlpha * (orient.roll + (gyro.x) * cycle) + (1 - compliAlpha) * rollAccel;
 	orient.roll = compliAlpha * (orient.roll + (gyro.x * cycle) - rollAccel) + rollAccel;
 }
+
+void compli(class MPU6050 &mpu, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
+	//Complimentary Filter to Mix Gyro and Accelerometer Data
+	mpu.readData();
+
+	orient.rollGyro = mpu.gx;
+	orient.pitchGyro = mpu.gy;
+	orient.yawGyro = mpu.gz;
+
+	double cycle = (millis() - compliClockOld) * DIV_BY_MILL;
+
+	double pitchAccel = atan2(-mpu.ax, mpu.az)*RAD_TO_DEGREE*ACC_SCALAR + PITCH_OFFSET;
+	//orient.pitch = compliAlpha * (orient.pitch + (gyro.y) * cycle) + (1 - compliAlpha) * pitchAccel;
+	orient.pitch = compliAlpha * (orient.pitch + (mpu.gy * cycle) - pitchAccel) + pitchAccel;
+
+	double rollAccel = atan2(mpu.ay, mpu.az)*RAD_TO_DEGREE*ACC_SCALAR + ROLL_OFFSET;
+	//orient.roll = compliAlpha * (orient.roll + (gyro.x) * cycle) + (1 - compliAlpha) * rollAccel;
+	orient.roll = compliAlpha * (orient.roll + (mpu.gx * cycle) - rollAccel) + rollAccel;
+}

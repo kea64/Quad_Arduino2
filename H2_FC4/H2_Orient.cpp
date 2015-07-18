@@ -17,3 +17,10 @@ void initAngles(struct ORIENT_STRUCT &orient, class ADXL345 &acc){
 	orient.pitch = atan2(-acc.x, acc.z) * RAD_TO_DEGREE + PITCH_OFFSET;
 
 }
+
+void initAngles(struct ORIENT_STRUCT &orient, class MPU6050 &mpu){
+	mpu.readData(); //Obtains Initial Angles; Quad must be motionless
+	orient.roll = atan2(mpu.ay, mpu.az) * RAD_TO_DEGREE + ROLL_OFFSET; //Accounts for Angle Differences
+	orient.pitch = atan2(-mpu.ax, mpu.az) * RAD_TO_DEGREE + PITCH_OFFSET;
+
+}

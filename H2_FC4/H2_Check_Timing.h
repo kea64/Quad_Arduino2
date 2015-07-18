@@ -19,6 +19,8 @@ void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, 
 
 void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld);
 
+void checkCompli(class MPU6050 &mpu, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld);
+
 void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient);
 
 void checkTemp(class BMP180 &baro, unsigned long &tempClockOld);

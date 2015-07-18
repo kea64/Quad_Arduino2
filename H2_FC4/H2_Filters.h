@@ -18,4 +18,6 @@ void compli(class L3D4200D &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &or
 
 void compli(class ITG3200 &gyro, class ADXL345 &accel, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld);
 
+void compli(class MPU6050 &mpu, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld);
+
 #endif
