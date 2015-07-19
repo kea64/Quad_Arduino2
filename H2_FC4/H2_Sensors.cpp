@@ -144,20 +144,23 @@ void MPU6050::readData(){
 
 void MPU6050::resetWake(){
   
-  //Serial.println("Resetting MPU6050 and waking it up.....");
-  Wire.beginTransmission(MPU6050_address);
-  Wire.write(MPU6050_PWR1);
-  Wire.write(0b10000000);
-  Wire.endTransmission();
-  
-  delay(100); // Waiting for the reset to complete
-   
-  Wire.beginTransmission(MPU6050_address);
-  Wire.write(MPU6050_PWR1);
- 
-  Wire.write(0b00000000);
-  Wire.endTransmission();
-  
+//  //Serial.println("Resetting MPU6050 and waking it up.....");
+//  Wire.beginTransmission(MPU6050_address);
+//  Wire.write(MPU6050_PWR1);
+//  Wire.write(0b10000000);
+//  Wire.endTransmission();
+//  
+//  delay(100); // Waiting for the reset to complete
+//   
+//  Wire.beginTransmission(MPU6050_address);
+//  Wire.write(MPU6050_PWR1);
+// 
+//  Wire.write(0b00000000);
+//  Wire.endTransmission();
+
+  i2c_writeReg(MPU6050_address, 0x6B, 0x80); //Reset
+  delay(5);
+  i2c_writeReg(MPU6050_address, 0x6B, 0x03);             //PWR_MGMT_1    -- SLEEP 0; CYCLE 0; TEMP_DIS 0; CLKSEL 3 (PLL with Z Gyro reference)
 }
 
 void MPU6050::setDLPF(int BW){
@@ -1197,4 +1200,11 @@ void MS5611::resetReference(){
   referencePressure_ = readPressure();
   update();
   alt = rawAlt;
+}
+
+void i2c_writeReg(byte addr, byte reg, byte val){
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  Wire.write(val);
+  Wire.endTransmission();
 }

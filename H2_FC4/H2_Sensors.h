@@ -12,6 +12,8 @@ typedef enum
     MS5611_ULTRA_LOW_POWER  = 0x00
 } ms5611_osr_t;
 
+void i2c_writeReg(byte addr, byte reg, byte val);
+
 class MPU6050{
   public:
     MPU6050();
