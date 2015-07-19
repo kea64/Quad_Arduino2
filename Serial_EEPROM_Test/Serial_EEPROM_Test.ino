@@ -81,28 +81,22 @@ void SerialProcess(){
         float tempInt = 0;
         switch(inBuf.buf2.toInt()){
           case 0:
-            //Serial.print("A: ");
-           // Serial.print(inBuf.buf3);
-            //Serial.print(" V: ");
+            //Read Float
             EEPROM.get(inBuf.buf3.toInt(), tempFloat);
-            //Serial.println(tempFloat);
             TXData(inBuf.buf3.toInt(), tempFloat);
             break;
           case 1:
-            EEPROM.put(inBuf.buf3.toInt(), atof(inBuf.buf4.c_str()));
+            //Read Int
+            //Serial.println(EEPROM.read(inBuf.buf3.toInt()));
+            TXData(inBuf.buf3.toInt(), EEPROM.read(inBuf.buf3.toInt()));
             break;
           case 2:
+            //Write Integer
             EEPROM.put(inBuf.buf3.toInt(), atoi(inBuf.buf4.c_str()));
             break; 
-          case 3: 
-            //Serial.print("A: ");
-            //Serial.print(inBuf.buf3);
-            //Serial.print(" V: ");
-            //EEPROM.get(inBuf.buf3.toInt(), tempInt);
-            //EEPROM.read(inBuf.buf3.toInt());
-            Serial.println(EEPROM.read(inBuf.buf3.toInt()));
-            
-            TXData(inBuf.buf3.toInt(), EEPROM.read(inBuf.buf3.toInt()));
+          case 3:
+            //Write Float
+            EEPROM.put(inBuf.buf3.toInt(), atof(inBuf.buf4.c_str())); 
             break;
           default:
             Serial.print("E2");
@@ -135,36 +129,6 @@ void SerialProcess(){
   }
 }
 
-void SerialProcess2(int &buffer1, int &buffer2){
-  if (Serial.available() > 0){
-    int stuff = Serial.parseInt();
-    if(stuff != -1){
-      buffer1 = buffer2;
-      buffer2 = stuff;
-    } else {
-      EEPROM.write(buffer1, buffer2);
-      buffer1 = 0;
-      buffer2 = 0;
-    }
-    Serial.println(stuff);
-  }
-}
-
-void SerialProcess3(int &buffer1, int &buffer2){
-  if (Serial.available() > 0){
-    int stuff = Serial.parseInt();
-    if(stuff != -1){
-      buffer1 = buffer2;
-      buffer2 = stuff;
-    } else {
-      EEPROM.write(buffer1, buffer2);
-      buffer1 = 0;
-      buffer2 = 0;
-    }
-    Serial.println(stuff);
-  }
-}
-
 
 void doSomething(){
   if(EEPROM.read(LEDAddr) > 0){
@@ -191,7 +155,7 @@ void TXData(int loc, float dat){
   Serial.print("/");
   Serial.print(dat);
   Serial.print("/");
-  Serial.print(FC_ADDRESS);
+  Serial.println(FC_ADDRESS);
 }
 
 void TXData(int loc, int dat){
@@ -201,7 +165,7 @@ void TXData(int loc, int dat){
   Serial.print("/");
   Serial.print(dat);
   Serial.print("/");
-  Serial.print(FC_ADDRESS);
+  Serial.println(FC_ADDRESS);
 }
 
 void EEPROMClear(){

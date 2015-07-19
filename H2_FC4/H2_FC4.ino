@@ -57,6 +57,7 @@ TinyGPSPlus gps;
 //OUTPUT_STRUCT output;
 //PID_REGISTER channels2;
 
+
 //-------------------------------SETUP-----------------------------------//
 
 void setup(){
@@ -116,6 +117,9 @@ void loop(){
   #if defined(BMP085_EN) || defined(BMP180_EN)
     BMP180 baro;
   #endif
+  #if defined(MS5611_EN)
+    MS5611 baro;
+  #endif
   
   ORIENT_STRUCT orient;
   TARGET_STRUCT target;
@@ -148,6 +152,9 @@ void loop(){
   #endif
   #if defined(BMP180_EN) || defined(BMP085_EN)
     baro.begin(BARO_MODE, altAlpha);
+  #endif
+  #if defined(MS5611_EN)
+    baro.begin(altAlpha, altVelAlpha);
   #endif
   
   channels.rsPID.updateDefaults(KPRS, KIRS, KDRS, 0, ROLL_STAB_MAXIMUM, -ROLL_STAB_MAXIMUM, KMRS);
@@ -203,7 +210,9 @@ void loop(){
     #endif
     
     checkBaro(baro, baroClockOld, orient);
-    checkTemp(baro, tempClockOld);
+    #if defined(BMP180_EN) || defined(BMP085_EN)
+      checkTemp(baro, tempClockOld);
+    #endif
     
     if (GPS_EN){
       updateGPS(orient, target);
@@ -211,7 +220,7 @@ void loop(){
     
     updateMode(channels, target, orient, RC_CONTROL_MODE, modeClockOld);
     
-    checkArming(MOTOR_EN);
+    checkArming(MOTOR_EN, baro);
     
     if (MOTOR_EN || AUXILIARY_EN){
       updateController(channels, target, orient, output, RC_CONTROL_MODE, controlClockOld);
@@ -223,7 +232,7 @@ void loop(){
     }
     
     //Status Feedback
-    #if defined(MPU6050_EN)
+    #if defined(MPU6050_EN) && defined(MS5611_EN)
       transmitData(orient, mpu, baro, output, commClockOld);
     #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
       transmitData(orient, accel, gyro, baro, output, commClockOld); 
@@ -349,7 +358,7 @@ void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D420
    }
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
      if (DEBUG_EN){

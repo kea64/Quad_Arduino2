@@ -23,6 +23,8 @@ void checkCompli(class MPU6050 &mpu, class HMC5883L &mag, struct ORIENT_STRUCT &
 
 void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient);
 
+void checkBaro(class MS5611 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient);
+
 void checkTemp(class BMP180 &baro, unsigned long &tempClockOld);
 
 #endif

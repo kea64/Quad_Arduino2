@@ -15,8 +15,9 @@
 //#define ITG3200_EN
 //#define L3D4200D_EN
 #define HMC5883L_EN
-#define BMP085_EN
+//#define BMP085_EN
 //#define BMP180_EN
+#define MS5611_EN
 
 #if (NANO)
   #define channel1Pin A3
@@ -58,7 +59,7 @@
 #define INITIAL_ARM_DELAY 3000
 
 #define DEBUG_EN 1
-#define GPS_EN 1
+#define GPS_EN 0
 #define AUXILIARY_EN 0
 #define ACRO_EN 1
 
@@ -67,7 +68,9 @@
   #define MPU6050_ACCEL_GAIN 1
   #define MPU6050_DLPF 3
 #endif
+
 #define altAlpha 0.9
+#define altVelAlpha 0.5
 #define compliAlpha 0.97
 #define dAlpha 0.5
 #define GYROALPHA 1
@@ -75,11 +78,11 @@
 
 #define BARO_MODE 3
 
-#define COMPLI_DELAY 3
+#define COMPLI_DELAY 10
 #define BARO_DELAY 50
 #define TEMP_DELAY 2000
 #define COMM_DELAY 250
-#define CONTROL_DELAY 3
+#define CONTROL_DELAY 10
 #define MODE_DELAY 50
 
 #define TAIL_SERVO_MAX_DEGREE 70

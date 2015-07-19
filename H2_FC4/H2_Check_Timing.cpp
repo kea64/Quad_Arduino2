@@ -50,6 +50,13 @@ void checkBaro(class BMP180 &baro, unsigned long &baroClockOld, struct ORIENT_ST
 	}
 }
 
+void checkBaro(class MS5611 &baro, unsigned long &baroClockOld, struct ORIENT_STRUCT &orient){
+	if ((millis() - baroClockOld) >= BARO_DELAY){
+		baro.update();
+		baroClockOld = millis();
+	}
+}
+
 void checkTemp(class BMP180 &baro, unsigned long &tempClockOld){
 	if ((millis() - tempClockOld) >= TEMP_DELAY){
 		baro.updateTemperature();

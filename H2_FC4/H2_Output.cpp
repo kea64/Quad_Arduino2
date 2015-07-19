@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
+#include "H2_Sensors.h"
 #include "H2_Output.h"
 #include "H2_Drone_Values.h"
 #include "H2_Support.h"
@@ -75,10 +76,33 @@ void processMotors(struct OUTPUT_STRUCT output){
 	}
 }
 
-void checkArming(bool &MOTOR_EN){
+void checkArming(bool &MOTOR_EN, class MS5611 &baro){
 	if (millis() > INITIAL_ARM_DELAY){
 		if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_ENGAGE_THRESHOLD && channel3Cycle > 100 && channel4Cycle > 100){
-			MOTOR_EN = 1;
+			if(MOTOR_EN != 1){
+                          #if defined(M5611_EN)
+                              baro.resetReference();
+                          #endif
+                        }
+                        MOTOR_EN = 1;
+			digitalWrite(13, HIGH);
+
+		}
+		else if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle >= ARM_DISENGAGE_THRESHOLD){
+			MOTOR_EN = 0;
+			digitalWrite(13, LOW);
+		}
+	}
+	//Perhaps Add PID DISABLE Code Here
+}
+
+void checkArming(bool &MOTOR_EN, class BMP180 &baro){
+	if (millis() > INITIAL_ARM_DELAY){
+		if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_ENGAGE_THRESHOLD && channel3Cycle > 100 && channel4Cycle > 100){
+			if(MOTOR_EN != 1){
+                          //Insert alt reset code for BMP180 HERE
+                        }
+                        MOTOR_EN = 1;
 			digitalWrite(13, HIGH);
 
 		}

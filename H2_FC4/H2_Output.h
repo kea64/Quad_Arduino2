@@ -6,6 +6,7 @@
 #include "H2_Output.h"
 #include "H2_Drone_Values.h"
 #include "H2_Support.h"
+//#include "H2_Sensors.h"
 
 struct OUTPUT_STRUCT{
 	int roll;
@@ -16,6 +17,7 @@ struct OUTPUT_STRUCT{
 
 void processMotors(struct OUTPUT_STRUCT output);
 
-void checkArming(bool &MOTOR_EN);
+void checkArming(bool &MOTOR_EN, class MS5611 &baro);
+void checkArming(bool &MOTOR_EN, class BMP180 &baro);
 
 #endif
