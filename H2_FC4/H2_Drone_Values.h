@@ -45,6 +45,8 @@
   #define GPS_SERIAL 1
 #endif
 
+#define FC_ADDRESS 7
+
 #define SERIAL0_BAUD 115200
 #define SERIAL1_BAUD 38400
 
@@ -58,10 +60,12 @@
 #define RAD_TO_DEGREE 57.3
 #define INITIAL_ARM_DELAY 3000
 
-#define DEBUG_EN 1
-#define GPS_EN 0
+//#define DEBUG_EN 0
 #define AUXILIARY_EN 0
 #define ACRO_EN 1
+
+#define GPS_EN 
+#define SERIAL_COM_EN
 
 #if defined(MPU6050_EN)
   #define MPU6050_GYRO_GAIN 1

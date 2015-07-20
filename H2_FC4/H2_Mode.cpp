@@ -32,14 +32,15 @@ void updateMode(struct PID_REGISTER &channels, struct TARGET_STRUCT &target, str
 				channels.apPID.setIntegral(pitchChannel);
 			}
 
-			if (GPS_EN && orient.GPS_LOCK){
-				target.yaw = int(TinyGPSPlus::courseTo(orient.latitude, orient.longitude, waypoint[target.waypointCounter], waypoint[target.waypointCounter + 1]));
-				target.latitude = waypoint[target.waypointCounter];
-				target.longitude = waypoint[target.waypointCounter + 1];
-			}
-			else {
-				target.yaw = orient.yaw;
-			}
+                        #if defined(GPS_EN)
+                            if(orient.GPS_LOCK){
+                              target.yaw = int(TinyGPSPlus::courseTo(orient.latitude, orient.longitude, waypoint[target.waypointCounter], waypoint[target.waypointCounter + 1]));
+			      target.latitude = waypoint[target.waypointCounter];
+		              target.longitude = waypoint[target.waypointCounter + 1];
+                            }
+                        #else
+                              target.yaw = orient.yaw;
+                        #endif
 
 			RC_CONTROL_MODE = 1;
 

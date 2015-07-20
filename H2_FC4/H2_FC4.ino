@@ -5,6 +5,7 @@
 #include <Wire.h>
 #include <PinChangeInt.h>
 #include <TinyGPS++.h>
+#include <EEPROM.h>
 
 #include "H2_Sensors.h"
 #include "H2_TiltComp.h"
@@ -18,6 +19,7 @@
 #include "H2_Mode.h"
 #include "H2_Filters.h"
 #include "H2_Check_Timing.h"
+#include "H2_EEPROM.h"
 
 double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
                                   39.956952, -75.188233, 3.0,
@@ -63,7 +65,7 @@ TinyGPSPlus gps;
 void setup(){
   Wire.begin();
   Serial.begin(SERIAL0_BAUD);
-  #if (GPS_EN && GPS_SERIAL == 1)
+  #if (defined(GPS_EN) && GPS_SERIAL == 1)
     Serial1.begin(SERIAL1_BAUD);
   #endif
   
@@ -125,6 +127,13 @@ void loop(){
   TARGET_STRUCT target;
   OUTPUT_STRUCT output;
   PID_REGISTER channels;
+  EEPROM_DAT EEDAT;
+  
+  read_EEPROM(EEDAT); //Initialize EEPROM DATA
+  
+  #if defined(SERIAL_COM_EN)
+    PACKET_BUFFER packet = {"", "", "", "", "", ""}; //Prep for Serial COMM
+  #endif
   
   output.roll = 0;
   output.pitch = 0;
@@ -167,10 +176,10 @@ void loop(){
   
   channels.atPID.updateDefaults(KPT, KIT, KDT, 0, THROTTLE_MAXIMUM, THROTTLE_MINIMUM, KMT);
   
-  if (GPS_EN){
+  #if defined(GPS_EN)
     channels.arPID.updateDefaults(GPR, GIR, GDR, 0, GPS_ROLL_MAXIMUM, -GPS_ROLL_MAXIMUM, GMR);
     channels.apPID.updateDefaults(GPP, GIP, GDP, 0, GPS_PITCH_MAXIMUM, -GPS_PITCH_MAXIMUM, GMP);
-  }
+  #endif
   
   delay(500);
   
@@ -214,9 +223,15 @@ void loop(){
       checkTemp(baro, tempClockOld);
     #endif
     
-    if (GPS_EN){
+    #if defined(GPS_EN)
       updateGPS(orient, target);
-    }
+    #endif
+    
+    #if defined(SERIAL_COM_EN)
+      SerialProcess(packet);
+    #endif
+    
+    read_EEPROM(EEDAT);
     
     updateMode(channels, target, orient, RC_CONTROL_MODE, modeClockOld);
     
@@ -233,9 +248,9 @@ void loop(){
     
     //Status Feedback
     #if defined(MPU6050_EN) && defined(MS5611_EN)
-      transmitData(orient, mpu, baro, output, commClockOld);
+      transmitData(orient, mpu, baro, output, commClockOld, EEDAT);
     #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
-      transmitData(orient, accel, gyro, baro, output, commClockOld); 
+      transmitData(orient, accel, gyro, baro, output, commClockOld, EEDAT); 
     #endif
     
   } 
@@ -276,10 +291,10 @@ void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
   
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D4200D &gyro,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D4200D &gyro,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld, struct EEPROM_DAT EEDAT){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
-     if (DEBUG_EN){
+     if (EEDAT.DEBUG_EN){
        
        /*
        Serial.print("AccX: ");
@@ -358,10 +373,10 @@ void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D420
    }
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
+void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld, struct EEPROM_DAT EEDAT){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
-     if (DEBUG_EN){
+     if (EEDAT.DEBUG_EN){
        
        /*
        Serial.print("AccX: ");

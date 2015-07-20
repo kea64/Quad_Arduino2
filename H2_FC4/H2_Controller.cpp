@@ -41,7 +41,7 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
 		double errorRoll;
 		double errorPitch;
 
-		if (GPS_EN){
+		#if defined(GPS_EN)
 			errorLongitude = target.longitude - orient.longitude;
 			errorLatitude = target.latitude - orient.latitude;
 			errorRoll = (errorLongitude * cos(radians(orient.yaw)) + errorLatitude * sin(radians(orient.yaw)));
@@ -49,7 +49,7 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
 
 			channels.arPID.calc(errorRoll, 0, cycle);
 			channels.apPID.calc(errorPitch, 0, cycle);
-		}
+		#endif
 
 		switch (RC_CONTROL_MODE){
 		case 0:
