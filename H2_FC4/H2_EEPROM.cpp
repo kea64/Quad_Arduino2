@@ -3,8 +3,14 @@
 #include "H2_EEPROM.h"
 #include "H2_Drone_Values.h"
 
-#define EEPROM_SIZE 2 //EEPROM SIZE IN BYTES
+#if defined(CRIUS)
+  #define EEPROM_SIZE 4096
+#elif defined(NANO)
+  #define EEPROM_SIZE 1024
+#endif
 
+//EEPROM MEMORY LOCATIONS
+//0-149 Bit/Int Values //150++ Floats
 #define ACRO_LOC 0
 #define STAB_LOC 1
 #define DEBUG_LOC 47

@@ -55,6 +55,8 @@
 #define GREEN_LED 30
 #define RED_LED 13
 
+#define ARM_DELAY 100
+
 #define GPS_SATELLITE_MINIMUM 5
 #define DIV_BY_MILL 0.001
 #define DIV_BY_MICRO 0.000001

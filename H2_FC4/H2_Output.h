@@ -17,7 +17,7 @@ struct OUTPUT_STRUCT{
 
 void processMotors(struct OUTPUT_STRUCT output);
 
-void checkArming(bool &MOTOR_EN, class MS5611 &baro);
-void checkArming(bool &MOTOR_EN, class BMP180 &baro);
+void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro);
+void checkArming(bool &MOTOR_EN, int &rollOverDelay, class BMP180 &baro);
 
 #endif

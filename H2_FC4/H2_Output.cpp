@@ -76,40 +76,71 @@ void processMotors(struct OUTPUT_STRUCT output){
 	}
 }
 
-void checkArming(bool &MOTOR_EN, class MS5611 &baro){
+void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro){
 	if (millis() > INITIAL_ARM_DELAY){
 		if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_ENGAGE_THRESHOLD && channel3Cycle > 100 && channel4Cycle > 100){
 			if(MOTOR_EN != 1){
                           #if defined(M5611_EN)
                               baro.resetReference();
                           #endif
+                          rollOverDelay++;
                         }
-                        MOTOR_EN = 1;
-			digitalWrite(13, HIGH);
+                        if(rollOverDelay >= ARM_DELAY){
+                          MOTOR_EN = 1;
+                          rollOverDelay = 0;
+			  digitalWrite(13, HIGH);
+                        }
 
 		}
 		else if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle >= ARM_DISENGAGE_THRESHOLD){
-			MOTOR_EN = 0;
-			digitalWrite(13, LOW);
+			if(MOTOR_EN != 0){
+                          rollOverDelay--;
+                        }
+                        if(rollOverDelay <= -ARM_DELAY){
+                          MOTOR_EN = 0;
+                          rollOverDelay = 0;
+			  digitalWrite(13, LOW);
+                        }
 		}
+                else{
+                  //Stick not in arm/disarm positions
+                  rollOverDelay = 0; //Reset roll over
+                }
 	}
 	//Perhaps Add PID DISABLE Code Here
 }
 
-void checkArming(bool &MOTOR_EN, class BMP180 &baro){
+void checkArming(bool &MOTOR_EN, int &rollOverDelay, class BMP180 &baro){
 	if (millis() > INITIAL_ARM_DELAY){
 		if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle <= ARM_ENGAGE_THRESHOLD && channel3Cycle > 100 && channel4Cycle > 100){
 			if(MOTOR_EN != 1){
                           //Insert alt reset code for BMP180 HERE
+                          
+                          rollOverDelay++;
                         }
-                        MOTOR_EN = 1;
-			digitalWrite(13, HIGH);
+                        
+                        if(rollOverDelay >= ARM_DELAY){
+                          MOTOR_EN = 1;
+                          rollOverDelay = 0;
+			  digitalWrite(13, HIGH);
+                        }
 
 		}
 		else if (channel3Cycle <= ARM_THROTTLE_THRESHOLD && channel4Cycle >= ARM_DISENGAGE_THRESHOLD){
-			MOTOR_EN = 0;
-			digitalWrite(13, LOW);
+			if(MOTOR_EN != 0){
+                          rollOverDelay--;
+                        }
+                        if(rollOverDelay <= -ARM_DELAY){
+                          MOTOR_EN = 0;
+                          rollOverDelay = 0;
+			  digitalWrite(13, LOW);
+                        }
+                        
 		}
+                else{
+                  //Stick not in arm/disarm positions
+                  rollOverDelay = 0; //Reset roll over
+                }
 	}
 	//Perhaps Add PID DISABLE Code Here
 }

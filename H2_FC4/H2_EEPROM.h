@@ -24,7 +24,6 @@ struct PACKET_BUFFER{
   String buf2;
   String buf3;
   String buf4;
-  String buf5;
 };
 
 void read_EEPROM(struct EEPROM_DAT &EE);

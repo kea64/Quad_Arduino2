@@ -129,10 +129,12 @@ void loop(){
   PID_REGISTER channels;
   EEPROM_DAT EEDAT;
   
+  int rollOverDelay = 0; //Arming Safety Delay
+  
   read_EEPROM(EEDAT); //Initialize EEPROM DATA
   
   #if defined(SERIAL_COM_EN)
-    PACKET_BUFFER packet = {"", "", "", "", "", ""}; //Prep for Serial COMM
+    PACKET_BUFFER packet = {"", "", "", "", ""}; //Prep for Serial COMM
   #endif
   
   output.roll = 0;
@@ -205,6 +207,7 @@ void loop(){
   commClockOld = millis();
   controlClockOld = millis();
   modeClockOld = millis();
+ 
   
 //_______________________________________________________________________// 
 //---------------------------Actual Loop---------------------------------//
@@ -235,7 +238,7 @@ void loop(){
     
     updateMode(channels, target, orient, RC_CONTROL_MODE, modeClockOld);
     
-    checkArming(MOTOR_EN, baro);
+    checkArming(MOTOR_EN, rollOverDelay, baro);
     
     if (MOTOR_EN || AUXILIARY_EN){
       updateController(channels, target, orient, output, RC_CONTROL_MODE, controlClockOld);
