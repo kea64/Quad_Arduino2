@@ -33,8 +33,8 @@ void SerialProcess(struct PACKET_BUFFER &packet){
       packet.buf1 = packet.buf2;
       packet.buf2 = packet.buf3;
       packet.buf3 = packet.buf4;
-      packet.buf4 = packet.buf5;
-      packet.buf5 = packet.inBuffer;
+      packet.buf4 = packet.inBuffer;
+
       packet.inBuffer = "";
     } else {
       packet.inBuffer += (char)inChar; //Continue to build string
@@ -46,19 +46,9 @@ void SerialProcess(struct PACKET_BUFFER &packet){
     if (inChar == 13) {
       
       //Verify Correct Preamble and Checksum
-      if(packet.buf1.toInt() == FC_ADDRESS && packet.buf5.toInt() == FC_ADDRESS){
-        //Check for purpose of transmission
-        //1 = Write to EEPROM, 0 = Simple Read from EEPROM
-//        if(packet.buf2.toInt() == 1){
-//          EEPROM.put(packet.buf3.toInt(), atof(packet.buf4.c_str()));
-//        } else if(packet.buf2.toInt() == 0){
-//          Serial.print("A: ");
-//          Serial.print(packet.buf3);
-//          Serial.print(" V: ");
-//          float temp = 0.00f;
-//          EEPROM.get(packet.buf3.toInt(), temp);
-//          Serial.println(temp);
-//        }
+      if(packet.buf1.toInt() == FC_ADDRESS){
+        
+        //0: Read Float || 1: Read Int || 2: Write Float || 3: Write Int
         float tempFloat = 0.000000f;
         float tempInt = 0;
         switch(packet.buf2.toInt()){
@@ -73,12 +63,12 @@ void SerialProcess(struct PACKET_BUFFER &packet){
             TXData(packet.buf3.toInt(), EEPROM.read(packet.buf3.toInt()));
             break;
           case 2:
-            //Write Integer
-            EEPROM.put(packet.buf3.toInt(), atoi(packet.buf4.c_str()));
+            //Write Float
+            EEPROM.put(packet.buf3.toInt(), atof(packet.buf4.c_str()));
             break; 
           case 3:
-            //Write Float
-            EEPROM.put(packet.buf3.toInt(), atof(packet.buf4.c_str())); 
+            //Write Int
+            EEPROM.put(packet.buf3.toInt(), atoi(packet.buf4.c_str())); 
             break;
           default:
             Serial.print("E2");
@@ -89,7 +79,6 @@ void SerialProcess(struct PACKET_BUFFER &packet){
         packet.buf2 = "";
         packet.buf3 = "";
         packet.buf4 = "";
-        packet.buf5 = "";
         Serial.println("E1");
       }
       packet.inBuffer = "";
