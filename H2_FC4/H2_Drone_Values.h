@@ -42,6 +42,7 @@
   #define channel4 11
   #define channel5 12
   #define channel6 13
+  #define PPM_PIN 48
   #define GPS_SERIAL 1
 #endif
 

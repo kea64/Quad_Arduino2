@@ -1,20 +1,4 @@
-﻿/*
-HMC5883L_Example.ino - Example sketch for integration with an HMC5883L triple axis magnetometer.
- Copyright (C) 2013 BluLemonLabs (bluelemonlabs.blogspot.com)
- 
- This program is free software: you can redistribute it and/or modify
- it under the terms of the version 3 GNU General Public License as
- published by the Free Software Foundation.
- 
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
- 
- You should have received a copy of the GNU General Public License
- along with this program.  If not, see <http://www.gnu.org/licenses/>.
- 
- */
+
 
 // Reference the I2C Library
 #include <Wire.h>
@@ -31,7 +15,7 @@ int error = 0;
 void setup()
 {
   // Initialize the serial port.
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   Serial.println("Starting the I2C interface.");
   Wire.begin(); // Start the I2C interface.
