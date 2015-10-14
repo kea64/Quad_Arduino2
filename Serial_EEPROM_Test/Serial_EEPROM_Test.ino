@@ -23,7 +23,7 @@ struct messageBuffer{
   String buf5;
 };
 
-messageBuffer inBuf = {"", "", ""};
+messageBuffer inBuf = {"", "", "", "", ""};
 
 void setup() {
   //EEPROMClear();
