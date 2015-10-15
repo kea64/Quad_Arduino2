@@ -9,11 +9,13 @@
   #define EEPROM_SIZE 1024
 #endif
 
+/*
 //EEPROM MEMORY LOCATIONS
 //0-149 Bit/Int Values //150++ Floats
 #define ACRO_LOC 0
 #define STAB_LOC 1
 #define DEBUG_LOC 47
+*/
 
 void read_EEPROM(struct EEPROM_DAT &EE){
   EE.ACRO1_EN = EEPROM.read(ACRO_LOC);

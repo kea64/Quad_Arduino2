@@ -10,6 +10,11 @@ Number of Bytes Used - 3
 
 */
 
+//EEPROM MEMORY LOCATIONS
+//0-149 Bit/Int Values //150++ Floats
+#define ACRO_LOC 0
+#define STAB_LOC 1
+#define DEBUG_LOC 47
 
 struct EEPROM_DAT{
   bool ACRO1_EN;

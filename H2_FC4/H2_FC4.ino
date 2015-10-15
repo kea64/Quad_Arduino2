@@ -21,6 +21,7 @@
 #include "H2_Check_Timing.h"
 #include "H2_EEPROM.h"
 
+
 double waypoint[] = {39.957016, -75.188874, 3.0,    //Waypoints
                                   39.956952, -75.188233, 3.0,
                                   39.957141, -75.188185, 3.0,
@@ -69,12 +70,17 @@ void setup(){
     Serial1.begin(SERIAL1_BAUD);
   #endif
   
-  pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Interrupt,CHANGE);
-  pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Interrupt,CHANGE);
-  pinMode(channel3,INPUT);digitalWrite(channel3,HIGH);PCintPort::attachInterrupt(channel3,&channel3Interrupt,CHANGE);
-  pinMode(channel4,INPUT);digitalWrite(channel4,HIGH);PCintPort::attachInterrupt(channel4,&channel4Interrupt,CHANGE);
-  pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Interrupt,CHANGE);
-  pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Interrupt,CHANGE);
+  #if defined(PWM_IN)
+    pinMode(channel1,INPUT);digitalWrite(channel1,HIGH);PCintPort::attachInterrupt(channel1,&channel1Interrupt,CHANGE);
+    pinMode(channel2,INPUT);digitalWrite(channel2,HIGH);PCintPort::attachInterrupt(channel2,&channel2Interrupt,CHANGE);
+    pinMode(channel3,INPUT);digitalWrite(channel3,HIGH);PCintPort::attachInterrupt(channel3,&channel3Interrupt,CHANGE);
+    pinMode(channel4,INPUT);digitalWrite(channel4,HIGH);PCintPort::attachInterrupt(channel4,&channel4Interrupt,CHANGE);
+    pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Interrupt,CHANGE);
+    pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Interrupt,CHANGE);
+  #endif
+  #if defined(PPM_IN)
+    pinMode(PPM_CHANNEL,INPUT);digitalWrite(PPM_CHANNEL,HIGH);PCintPort::attachInterrupt(PPM_CHANNEL,&channel1Interrupt,CHANGE);
+  #endif
   
   output1.attach(channel1Pin);
   output2.attach(channel2Pin);
