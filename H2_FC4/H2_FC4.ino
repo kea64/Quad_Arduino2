@@ -43,10 +43,20 @@ unsigned long channel1Start, channel2Start,channel3Start,channel4Start,channel5S
 
 double channel6Var = 0;
 
-Servo output1;
-Servo output2;
-Servo output3;
-Servo output4;
+#if defined(SPYDER_EN) || defined(TRI_EN) || defined(HEXACOPTER) || defined(OCTOCOPTER_EN)
+  Servo output1;
+  Servo output2;
+  Servo output3;
+  Servo output4;
+#endif
+#if defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
+  Servo output5;
+  Servo output6;
+#endif
+#if defined(OCTOCOPTER_EN)
+  Servo output7;
+  Servo output8;
+#endif
 
 TinyGPSPlus gps;
 
@@ -82,10 +92,20 @@ void setup(){
     pinMode(PPM_CHANNEL,INPUT);digitalWrite(PPM_CHANNEL,HIGH);PCintPort::attachInterrupt(PPM_CHANNEL,&channel1Interrupt,CHANGE);
   #endif
   
-  output1.attach(channel1Pin);
-  output2.attach(channel2Pin);
-  output3.attach(channel3Pin);
-  output4.attach(channel4Pin);
+  #if defined(SPYDER_EN) || defined(TRI_EN) || defined(HEXACOPTER) || defined(OCTOCOPTER_EN)
+    output1.attach(channel1Pin);
+    output2.attach(channel2Pin);
+    output3.attach(channel3Pin);
+    output4.attach(channel4Pin);
+  #endif
+  #if defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
+    output5.attach(channel5Pin);
+    output6.attach(channel6Pin);
+  #endif
+  #if defined(OCTOCOPTER_EN)
+    output7.attach(channel7Pin);
+    output8.attach(channel8Pin);
+  #endif
   
   //Indicator LED's ... To Be Assigned
   pinMode(RED_LED, OUTPUT);
@@ -249,10 +269,20 @@ void loop(){
     if (MOTOR_EN || AUXILIARY_EN){
       updateController(channels, target, orient, output, RC_CONTROL_MODE, controlClockOld);
     } else {
-      output1.writeMicroseconds(THROTTLE_MINIMUM);
-      output2.writeMicroseconds(THROTTLE_MINIMUM);
-      output3.writeMicroseconds(THROTTLE_MINIMUM);
-      output4.writeMicroseconds(THROTTLE_MINIMUM);
+      #if defined(SPYDER_EN) || defined(TRI_EN) || defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
+        output1.writeMicroseconds(THROTTLE_MINIMUM);
+        output2.writeMicroseconds(THROTTLE_MINIMUM);
+        output3.writeMicroseconds(THROTTLE_MINIMUM);
+        output4.writeMicroseconds(THROTTLE_MINIMUM);
+      #endif
+      #if defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
+        output5.writeMicroseconds(THROTTLE_MINIMUM);
+        output6.writeMicroseconds(THROTTLE_MINIMUM);
+      #endif
+      #if defined(OCTOCOPTER_EN)
+        output7.writeMicroseconds(THROTTLE_MINIMUM);
+        output8.writeMicroseconds(THROTTLE_MINIMUM);
+      #endif
     }
     
     //Status Feedback

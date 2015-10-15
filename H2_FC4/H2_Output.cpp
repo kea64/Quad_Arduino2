@@ -5,17 +5,27 @@
 #include "H2_Drone_Values.h"
 #include "H2_Support.h"
 
-extern Servo output1;
-extern Servo output2;
-extern Servo output3;
-extern Servo output4;
+#if defined(SPYDER_EN) || defined(TRI_EN) || defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
+  extern Servo output1;
+  extern Servo output2;
+  extern Servo output3;
+  extern Servo output4;
+#endif
+#if defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
+  extern Servo output5;
+  extern Servo output6;
+#endif
+#if defined(OCTOCOPTER_EN)
+  extern Servo output7;
+  extern Servo output8;
+#endif
 
 extern volatile int channel3Cycle, channel4Cycle;
 
 
 void processMotors(struct OUTPUT_STRUCT output){
 
-	if (SPYDER_EN){
+	#if defined(SPYDER_EN)
 		int op1 = output.throttle + output.roll - output.pitch + output.yaw;
 		int op2 = output.throttle - output.roll - output.pitch - output.yaw;
 		int op3 = output.throttle - output.roll + output.pitch + output.yaw;
@@ -31,15 +41,13 @@ void processMotors(struct OUTPUT_STRUCT output){
 			output2.writeMicroseconds(op2);
 			output3.writeMicroseconds(op3);
 			output4.writeMicroseconds(op4);
-		}
-		else {
+		} else {
 			output1.writeMicroseconds(THROTTLE_MINIMUM);
 			output2.writeMicroseconds(THROTTLE_MINIMUM);
 			output3.writeMicroseconds(THROTTLE_MINIMUM);
 			output4.writeMicroseconds(THROTTLE_MINIMUM);
 		}
-	}
-	else if (TRI_EN){
+	#elif defined(TRI_EN)
 
 		int op1 = output.throttle + output.roll - 0.8 * output.pitch;
 		int op2 = output.throttle - output.roll - 0.8 * output.pitch;
@@ -60,8 +68,7 @@ void processMotors(struct OUTPUT_STRUCT output){
 			output2.writeMicroseconds(op2);
 			output3.writeMicroseconds(op3);
 			output4.writeMicroseconds(op4);
-		}
-		else {
+		} else {
 			output1.writeMicroseconds(THROTTLE_MINIMUM);
 			output2.writeMicroseconds(THROTTLE_MINIMUM);
 			output3.writeMicroseconds(THROTTLE_MINIMUM);
@@ -73,7 +80,7 @@ void processMotors(struct OUTPUT_STRUCT output){
 			}
 			
 		}
-	}
+        #endif
 }
 
 void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro){
