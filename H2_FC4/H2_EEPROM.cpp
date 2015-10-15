@@ -52,7 +52,7 @@ void SerialProcess(struct PACKET_BUFFER &packet){
             TXData(packet.buf3.toInt(), tempFloat);
             break;
           case 1:
-            //Read Int
+            //Read Int (Actually a byte)
             //Serial.println(EEPROM.read(packet.buf3.toInt()));
             TXData(packet.buf3.toInt(), EEPROM.read(packet.buf3.toInt()));
             break;

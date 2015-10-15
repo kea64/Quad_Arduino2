@@ -186,9 +186,11 @@ void loop(){
   #endif
   #if defined(BMP180_EN) || defined(BMP085_EN)
     baro.begin(BARO_MODE, altAlpha);
+    baro.resetReference();
   #endif
   #if defined(MS5611_EN)
     baro.begin(altAlpha, altVelAlpha);
+    baro.resetReference();
   #endif
   
   channels.rsPID.updateDefaults(KPRS, KIRS, KDRS, 0, ROLL_STAB_MAXIMUM, -ROLL_STAB_MAXIMUM, KMRS);
