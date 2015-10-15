@@ -153,11 +153,8 @@ void loop(){
   TARGET_STRUCT target;
   OUTPUT_STRUCT output;
   PID_REGISTER channels;
-  EEPROM_DAT EEDAT;
   
   int rollOverDelay = 0; //Arming Safety Delay
-  
-  read_EEPROM(EEDAT); //Initialize EEPROM DATA
   
   #if defined(SERIAL_COM_EN)
     PACKET_BUFFER packet = {"", "", "", "", ""}; //Prep for Serial COMM
@@ -260,8 +257,6 @@ void loop(){
       SerialProcess(packet);
     #endif
     
-    read_EEPROM(EEDAT);
-    
     updateMode(channels, target, orient, RC_CONTROL_MODE, modeClockOld);
     
     checkArming(MOTOR_EN, rollOverDelay, baro);
@@ -287,9 +282,9 @@ void loop(){
     
     //Status Feedback
     #if defined(MPU6050_EN) && defined(MS5611_EN)
-      transmitData(orient, mpu, baro, output, commClockOld, EEDAT);
+      transmitData(orient, mpu, baro, output, commClockOld);
     #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
-      transmitData(orient, accel, gyro, baro, output, commClockOld, EEDAT); 
+      transmitData(orient, accel, gyro, baro, output, commClockOld); 
     #endif
     
   } 
@@ -330,10 +325,10 @@ void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
   
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D4200D &gyro,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld, struct EEPROM_DAT EEDAT){
+void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D4200D &gyro,  BMP180 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
-     if (EEDAT.DEBUG_EN){
+     if (EEPROM.read(DEBUG_)){
        
        /*
        Serial.print("AccX: ");
@@ -412,11 +407,10 @@ void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D420
    }
 }
 
-void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld, struct EEPROM_DAT EEDAT){
+void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro, struct OUTPUT_STRUCT output, unsigned long &commClockOld){
    if ((millis() - commClockOld) >= COMM_DELAY){
      
-     if (EEDAT.DEBUG_EN){
-       
+     if (EEPROM.read(DEBUG_) == 1){  
        /*
        Serial.print("AccX: ");
        Serial.print(acc.x);

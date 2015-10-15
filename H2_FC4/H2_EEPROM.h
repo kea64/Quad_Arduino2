@@ -12,16 +12,9 @@ Number of Bytes Used - 3
 
 //EEPROM MEMORY LOCATIONS
 //0-149 Bit/Int Values //150++ Floats
-#define ACRO_LOC 0
-#define STAB_LOC 1
-#define DEBUG_LOC 47
-
-struct EEPROM_DAT{
-  bool ACRO1_EN;
-  bool STAB_EN;
-  int DEBUG_EN;
-  
-};
+#define ACRO_ 0
+#define STAB_ 1
+#define DEBUG_ 47
 
 struct PACKET_BUFFER{
   String inBuffer;
@@ -30,8 +23,6 @@ struct PACKET_BUFFER{
   String buf3;
   String buf4;
 };
-
-void read_EEPROM(struct EEPROM_DAT &EE);
 
 void EEPROMFlush();
 
