@@ -23,6 +23,7 @@ class MPU6050{
     void setDLPF(int BW);
     void setGains(int gyro, int accel);
     void offsetCal();
+    void accelCalib();
     
     float temp;
     float ax, ay, az;
@@ -51,6 +52,7 @@ public:
 	void update();
 	void readFrom(byte address, int num, byte _buff[]);
 	void writeTo(byte address, byte val);
+        void accelCalib();
 
 	double x, y, z;
 private:

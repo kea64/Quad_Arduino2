@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include "H2_Sensors.h"
 #include "H2_TiltComp.h"
 #include "H2_Orient.h"
@@ -11,6 +12,7 @@
 #include "H2_Mode.h"
 #include "H2_Filters.h"
 #include "H2_Check_Timing.h"
+#include "H2_EEPROM.h"
 
 void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
 	//Main Sensor Reading and Motor Control
@@ -62,4 +64,20 @@ void checkTemp(class BMP180 &baro, unsigned long &tempClockOld){
 		baro.updateTemperature();
 		tempClockOld = millis();
 	}
+}
+
+void checkAccCalib(class MPU6050 &mpu){
+  if (EEPROM.read(ACCEL_CALIB_SCHEDULE_) == 1){
+    mpu.accelCalib();
+    
+    EEPROM.put(ACCEL_CALIB_SCHEDULE_, 0);
+  }
+}
+
+void checkAccCalib(class ADXL345 &accel){
+  if (EEPROM.read(ACCEL_CALIB_SCHEDULE_) == 1){
+    accel.accelCalib();
+    
+    EEPROM.put(ACCEL_CALIB_SCHEDULE_, 0);
+  }
 }

@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <EEPROM.h>
 #include "H2_Sensors.h"
+#include "H2_EEPROM.h"
 
 //MPU6050
 #define MPU6050_address 0x68
@@ -15,7 +17,7 @@
 #define MPU6050_data_start 59
 #define MPU6050_PWR1 107
 #define MPU6050_PWR2 108
-#define g 9.81                       // Gravitational accelration
+#define g 9.81                       // Gravitational acceleration
 
 //ADXL345
 #define ADXL345_DEVICE (0x53)
@@ -103,6 +105,11 @@ void MPU6050::init(int gyroGain, int accelGain, int DLPF){
   setDLPF(0);
   offsetCal();
   setDLPF(DLPF);
+  
+  //Accel Offset loading
+  EEPROM.get(ACCEL_OFFSET_X_, accel_x_OC);
+  EEPROM.get(ACCEL_OFFSET_Y_, accel_y_OC);
+  EEPROM.get(ACCEL_OFFSET_Z_, accel_z_OC);
 }
 
 void MPU6050::readData(){
@@ -287,7 +294,7 @@ void MPU6050::offsetCal(){
   //Serial.println(z);
  
   
-  
+  /*
   // Accel Offset Calculation
   //Serial.println("Calibrating accelrometer .... dont move the hardware ..........");
   x=axr;
@@ -306,6 +313,67 @@ void MPU6050::offsetCal(){
   accel_x_OC=x;
   accel_y_OC=y;
   accel_z_OC=z-(float)g*1000/accel_scale_fact;
+  */
+}
+
+void MPU6050::accelCalib(){
+  float rawExtrema[6] = {0,0,0,0,0,0};
+  
+  //Obtain new data
+  for (int i = 1; i <= 6; i++){
+    Serial.print("S"); Serial.println(i);
+       
+       if(SerialRequest() == 1){
+         readData();
+         if (axr > rawExtrema[0]){
+           rawExtrema[0] = axr;
+         } else if (axr < rawExtrema[1]){
+           rawExtrema[1] = axr;
+         }
+         if (ayr > rawExtrema[2]){
+           rawExtrema[2] = ayr;
+         } else if (ayr < rawExtrema[3]){
+           rawExtrema[3] = ayr;
+         }
+         if (azr > rawExtrema[4]){
+           rawExtrema[4] = azr;
+         } else if (azr < rawExtrema[5]){
+           rawExtrema[5] = azr;
+         }
+       } else {
+         i = 7;
+       }
+       
+  }
+  
+  //Error checking for weird values or timeouts
+  bool error = 0;
+  for (int i = 0; i < 6; i++){
+    if (rawExtrema[i] == 0.0){
+      error = 1;
+    }
+  }
+  
+  //Write new offsets
+  if (!error){
+    Serial.println(rawExtrema[0]);
+    Serial.println(rawExtrema[1]);
+    Serial.println(rawExtrema[2]);
+    Serial.println(rawExtrema[3]);
+    Serial.println(rawExtrema[4]);
+    Serial.println(rawExtrema[5]);
+    //EEPROM Write Here!
+    accel_x_OC = (rawExtrema[0] + rawExtrema[1])/2;
+    accel_y_OC = (rawExtrema[2] + rawExtrema[3])/2;
+    accel_z_OC = ((rawExtrema[4] + rawExtrema[5])/2);// - (float)g*1000/accel_scale_fact;
+    EEPROM.put(ACCEL_OFFSET_X_, accel_x_OC);
+    EEPROM.put(ACCEL_OFFSET_Y_, accel_y_OC);
+    EEPROM.put(ACCEL_OFFSET_Z_, accel_z_OC); 
+    
+  } else {
+    Serial.println("E3");
+  }
+  
 }
 
 void ADXL345::init(double accAlpha) {
@@ -360,6 +428,10 @@ void ADXL345::writeTo(byte address, byte val) {
 	Wire.write(address);             // send register address
 	Wire.write(val);                 // send value to write
 	Wire.endTransmission();         // end transmission
+}
+
+void ADXL345::accelCalib(){
+  
 }
 
 char BMP180::begin(char MODE, double alpha)

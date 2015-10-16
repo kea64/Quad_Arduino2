@@ -242,8 +242,10 @@ void loop(){
     //Sensor Updates
     #if defined(MPU6050_EN)
       checkCompli(mpu, mag, orient, compliClockOld);
+      checkAccCalib(mpu);
     #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
       checkCompli(gyro, accel, mag, orient, compliClockOld);
+      checkAccCalib(accel);
     #endif
     
     checkBaro(baro, baroClockOld, orient);
@@ -438,7 +440,19 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        //Serial.print(gyro.x);
        //Serial.print(" ");
        //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
+       Serial.print("AXR: ");
+       Serial.println(mpu.axr);
+       Serial.print("AYR: ");
+       Serial.println(mpu.ayr);
+       Serial.print("AZR: ");
+       Serial.println(mpu.azr);
        
+       Serial.print("AX: ");
+       Serial.println(mpu.ax);
+       Serial.print("AY: ");
+       Serial.println(mpu.ay);
+       Serial.print("AZ: ");
+       Serial.println(mpu.az);
        
        Serial.print("Roll: ");
        Serial.println(orient.roll);

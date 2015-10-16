@@ -15,6 +15,12 @@ Number of Bytes Used - 3
 #define ACRO_ 0
 #define STAB_ 1
 #define DEBUG_ 47
+#define ACCEL_CHECK_ 48
+#define ACCEL_CALIB_SCHEDULE_ 49
+
+#define ACCEL_OFFSET_X_ 150
+#define ACCEL_OFFSET_Y_ 154
+#define ACCEL_OFFSET_Z_ 158
 
 struct PACKET_BUFFER{
   String inBuffer;
@@ -25,6 +31,8 @@ struct PACKET_BUFFER{
 };
 
 void EEPROMFlush();
+
+int SerialRequest();
 
 void SerialProcess(struct PACKET_BUFFER &packet);
 

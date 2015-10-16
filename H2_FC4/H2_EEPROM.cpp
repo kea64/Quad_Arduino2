@@ -9,6 +9,8 @@
   #define EEPROM_SIZE 1024
 #endif
 
+#define SERIAL_TIMEOUT 10000
+
 void EEPROMFlush(){
   for(int i = 0; i < 4096; i++){
     if(EEPROM.read(i) != 0){
@@ -16,6 +18,46 @@ void EEPROMFlush(){
     }
   } 
 } 
+
+int SerialRequest(){
+  //Halts CPU and forces FC to request special data input
+  //Looks for answers in following input:
+  //   FC_ADDRESS*REPLY*
+  
+  //Buffer Variables
+  unsigned long startTime = millis();
+  String buf1, buf2, inBuffer;
+  
+  //While loops listens for reply until timeout
+  while(millis() - startTime <= SERIAL_TIMEOUT){
+    if (Serial.available() > 0){
+      int inChar = Serial.read();
+      
+      if (inChar == 42){
+        buf1 = buf2;
+        buf2 = inBuffer;
+        inBuffer = "";
+      } else {
+        inBuffer += (char)inChar;
+      }
+      
+      if (inChar == 13){
+        if (buf1.toInt() == FC_ADDRESS){
+          return(buf2.toInt());
+        } else {
+          buf1 = "";
+          buf2 = "";
+          inBuffer = "";
+          
+          Serial.println("E1"); //Unsure of Reply
+        }
+      }
+    }
+  }
+  
+  //Timeout Occurred... Return Error
+  return(-1);
+}
 
 void SerialProcess(struct PACKET_BUFFER &packet){
   //operate only upon new received byte
@@ -64,6 +106,10 @@ void SerialProcess(struct PACKET_BUFFER &packet){
             //Write Int
             EEPROM.put(packet.buf3.toInt(), atoi(packet.buf4.c_str())); 
             break;
+          case 4:
+            //Do Something
+            
+            break;  
           default:
             Serial.print("E2");
             break;

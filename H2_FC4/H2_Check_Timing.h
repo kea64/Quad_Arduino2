@@ -27,4 +27,8 @@ void checkBaro(class MS5611 &baro, unsigned long &baroClockOld, struct ORIENT_ST
 
 void checkTemp(class BMP180 &baro, unsigned long &tempClockOld);
 
+void checkAccCalib(class MPU6050 &mpu);
+
+void checkAccCalib(class ADXL345 &accel);
+
 #endif

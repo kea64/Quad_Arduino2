@@ -1,9 +1,11 @@
 #include <Arduino.h>
 #include <Servo.h>
+#include <EEPROM.h>
 #include "H2_Sensors.h"
 #include "H2_Output.h"
 #include "H2_Drone_Values.h"
 #include "H2_Support.h"
+#include "H2_EEPROM.h"
 
 #if defined(SPYDER_EN) || defined(TRI_EN) || defined(HEXACOPTER_EN) || defined(OCTOCOPTER_EN)
   extern Servo output1;
@@ -93,7 +95,11 @@ void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro){
                           rollOverDelay++;
                         }
                         if(rollOverDelay >= ARM_DELAY){
-                          MOTOR_EN = 1;
+                          if(EEPROM.read(ACCEL_CHECK_) != 0){
+                            MOTOR_EN = 1;
+                          } else {
+                            Serial.println("Accel not Calibrated");
+                          }
                           rollOverDelay = 0;
 			  digitalWrite(13, HIGH);
                         }
@@ -127,7 +133,11 @@ void checkArming(bool &MOTOR_EN, int &rollOverDelay, class BMP180 &baro){
                         }
                         
                         if(rollOverDelay >= ARM_DELAY){
-                          MOTOR_EN = 1;
+                          if (EEPROM.read(ACCEL_CHECK_) != 0){
+                            MOTOR_EN = 1;
+                          } else {
+                            Serial.println("Accel not Calibrated");
+                          }
                           rollOverDelay = 0;
 			  digitalWrite(13, HIGH);
                         }
