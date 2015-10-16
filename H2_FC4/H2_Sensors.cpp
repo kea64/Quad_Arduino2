@@ -356,12 +356,12 @@ void MPU6050::accelCalib(){
   
   //Write new offsets
   if (!error){
-    Serial.println(rawExtrema[0]);
-    Serial.println(rawExtrema[1]);
-    Serial.println(rawExtrema[2]);
-    Serial.println(rawExtrema[3]);
-    Serial.println(rawExtrema[4]);
-    Serial.println(rawExtrema[5]);
+    //Serial.println(rawExtrema[0]);
+    //Serial.println(rawExtrema[1]);
+    //Serial.println(rawExtrema[2]);
+    //Serial.println(rawExtrema[3]);
+    //Serial.println(rawExtrema[4]);
+    //Serial.println(rawExtrema[5]);
     //EEPROM Write Here!
     accel_x_OC = (rawExtrema[0] + rawExtrema[1])/2;
     accel_y_OC = (rawExtrema[2] + rawExtrema[3])/2;

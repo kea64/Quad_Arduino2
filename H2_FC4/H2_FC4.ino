@@ -440,12 +440,6 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        //Serial.print(gyro.x);
        //Serial.print(" ");
        //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
-       Serial.print("AXR: ");
-       Serial.println(mpu.axr);
-       Serial.print("AYR: ");
-       Serial.println(mpu.ayr);
-       Serial.print("AZR: ");
-       Serial.println(mpu.azr);
        
        Serial.print("AX: ");
        Serial.println(mpu.ax);
@@ -453,6 +447,13 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        Serial.println(mpu.ay);
        Serial.print("AZ: ");
        Serial.println(mpu.az);
+       
+       Serial.print("GX: ");
+       Serial.println(mpu.gx);
+       Serial.print("GY: ");
+       Serial.println(mpu.gy);
+       Serial.print("GZ: ");
+       Serial.println(mpu.gz);
        
        Serial.print("Roll: ");
        Serial.println(orient.roll);
