@@ -6,6 +6,7 @@
 
 //MPU6050
 #define MPU6050_address 0x68
+#define MPU6050_I2C_BYPASS 0x37
 #define MPU6050_self_test_x 13       // R/W
 #define MPU6050_self_test_y 14       // R/W
 #define MPU6050_self_test_z 15       // R/W
@@ -105,11 +106,19 @@ void MPU6050::init(int gyroGain, int accelGain, int DLPF){
   setDLPF(0);
   offsetCal();
   setDLPF(DLPF);
+  enableI2CBypass();
   
   //Accel Offset loading
   EEPROM.get(ACCEL_OFFSET_X_, accel_x_OC);
   EEPROM.get(ACCEL_OFFSET_Y_, accel_y_OC);
   EEPROM.get(ACCEL_OFFSET_Z_, accel_z_OC);
+}
+
+void MPU6050::enableI2CBypass(){
+  Wire.beginTransmission(MPU6050_address);
+  Wire.write(MPU6050_I2C_BYPASS);
+  Wire.write(2);
+  Wire.endTransmission();
 }
 
 void MPU6050::readData(){

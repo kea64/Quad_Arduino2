@@ -18,6 +18,7 @@ class MPU6050{
   public:
     MPU6050();
     void init(int gyroGain, int accelGain, int DLPF);
+    void enableI2CBypass();
     void readData();
     void resetWake();
     void setDLPF(int BW);
