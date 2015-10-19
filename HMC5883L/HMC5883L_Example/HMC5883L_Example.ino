@@ -1,5 +1,5 @@
 
-
+#include <Arduino.h>
 // Reference the I2C Library
 #include <Wire.h>
 // Reference the HMC5883L Compass Library
