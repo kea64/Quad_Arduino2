@@ -14,8 +14,8 @@
 void calcYaw(class HMC5883L &mag, struct ORIENT_STRUCT &orient){
 	mag.update();
         #if (CRIUS)
-          double CMx = mag.xScaled * cos(radians(orient.pitch - PITCH_OFFSET)) + mag.zScaled * sin(radians(orient.pitch - PITCH_OFFSET)); //Adjusts mX reading
-	  double CMy = mag.xScaled * sin(radians(orient.roll - ROLL_OFFSET)) * sin(radians(orient.pitch - PITCH_OFFSET)) + mag.yScaled * cos(radians(orient.roll - ROLL_OFFSET)) - mag.zScaled * sin(radians(orient.roll - ROLL_OFFSET)) * cos(radians(orient.pitch - PITCH_OFFSET)); //Adjusts mY Reading
+          double CMx = mag.xScaled * cos(radians(-(orient.pitch - PITCH_OFFSET))) + mag.zScaled * sin(radians(-(orient.pitch - PITCH_OFFSET))); //Adjusts mX reading
+	  double CMy = mag.xScaled * sin(radians(orient.roll - ROLL_OFFSET)) * sin(radians(-(orient.pitch - PITCH_OFFSET))) + mag.yScaled * cos(radians(orient.roll - ROLL_OFFSET)) - mag.zScaled * sin(radians(orient.roll - ROLL_OFFSET)) * cos(radians(-(orient.pitch - PITCH_OFFSET))); //Adjusts mY Reading
 	  orient.yaw = atan2(CMy, CMx) - radians(YAW_OFFSET);
         #elif (NANO)
 	  double CMx = mag.xScaled * cos(radians(orient.pitch - PITCH_OFFSET)) + mag.zScaled * sin(radians(orient.pitch - PITCH_OFFSET)); //Adjusts mX reading
