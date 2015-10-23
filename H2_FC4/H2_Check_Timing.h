@@ -31,4 +31,6 @@ void checkAccCalib(class MPU6050 &mpu);
 
 void checkAccCalib(class ADXL345 &accel);
 
+void checkMagCalib(class HMC5883L &mag);
+
 #endif

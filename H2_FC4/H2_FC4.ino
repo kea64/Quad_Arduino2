@@ -182,7 +182,7 @@ void loop(){
     accel.init(ACC_ALPHA);
   #endif
   #if defined(HMC5883L_EN)
-    mag.init(xMagError, yMagError, zMagError, xMagOffset, yMagOffset, zMagOffset);
+    mag.init();
   #endif
   #if defined(BMP180_EN) || defined(BMP085_EN)
     baro.begin(BARO_MODE, altAlpha);
@@ -243,6 +243,7 @@ void loop(){
     #if defined(MPU6050_EN)
       checkCompli(mpu, mag, orient, compliClockOld);
       checkAccCalib(mpu);
+      checkMagCalib(mag);
     #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
       checkCompli(gyro, accel, mag, orient, compliClockOld);
       checkAccCalib(accel);
@@ -440,20 +441,6 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        //Serial.print(gyro.x);
        //Serial.print(" ");
        //Serial.println(atan2(accel.y,accel.z)*(180.0/PI)*ACC_SCALAR);
-       
-       Serial.print("AX: ");
-       Serial.println(mpu.ax);
-       Serial.print("AY: ");
-       Serial.println(mpu.ay);
-       Serial.print("AZ: ");
-       Serial.println(mpu.az);
-       
-       Serial.print("GX: ");
-       Serial.println(mpu.gx);
-       Serial.print("GY: ");
-       Serial.println(mpu.gy);
-       Serial.print("GZ: ");
-       Serial.println(mpu.gz);
        
        Serial.print("Roll: ");
        Serial.println(orient.roll);

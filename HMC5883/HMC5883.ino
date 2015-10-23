@@ -49,12 +49,12 @@ void loop(){
     magHeading = atan2(mY,mX)*(180/pi)+180;
     
   }
-  //Serial.println(magHeading);
-  Serial.print("X: ");
-  Serial.println(mX);
-  Serial.print("Y: ");
-  Serial.println(mY);
-  Serial.print("Z: ");
-  Serial.println(mZ);
+  Serial.println(magHeading);
+  //Serial.print("X: ");
+  //Serial.println(mX);
+  //Serial.print("Y: ");
+  //Serial.println(mY);
+  //Serial.print("Z: ");
+  //Serial.println(mZ);
   delay(250);
 }

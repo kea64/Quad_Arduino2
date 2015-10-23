@@ -40,6 +40,7 @@
 
 //HMC5883L
 #define compass_address 0x1E       // The I2C address of the Magnetometer
+#define calibRunTime 30000
 //#define compass_XY_excitation 1160 // The magnetic field excitation in X and Y direction during Self Test (Calibration)
 //#define compass_Z_excitation 1080  // The magnetic field excitation in Z direction during Self Test (Calibration)
 //#define compass_rad2degree 57.3
@@ -327,6 +328,7 @@ void MPU6050::offsetCal(){
 
 void MPU6050::accelCalib(){
   float rawExtrema[6] = {0,0,0,0,0,0};
+  Serial.println("Start Calibration");
   
   //Obtain new data
   for (int i = 1; i <= 6; i++){
@@ -353,6 +355,7 @@ void MPU6050::accelCalib(){
          i = 7;
        }
        
+    Serial.println("End Calibration");
   }
   
   //Error checking for weird values or timeouts
@@ -740,7 +743,7 @@ void BMP180::updateTemperature(){
 	}
 }
 
-void HMC5883L::init(double xGainError, double yGainError, double zGainError, double xOffset, double yOffset, double zOffset){
+void HMC5883L::init(){
 	Wire.beginTransmission(compass_address);
 	Wire.write(0x01);
 
@@ -754,23 +757,113 @@ void HMC5883L::init(double xGainError, double yGainError, double zGainError, dou
 	// Writing the register value 0000 0011 for Idel
 	Wire.endTransmission();
 
-	xGainError_ = xGainError;
-	yGainError_ = yGainError;
-	zGainError_ = zGainError;
-
-	xOffset_ = xOffset;
-	yOffset_ = yOffset;
-	zOffset_ = zOffset;
+        //Load Initial Gains and Offsets from EEPROM
+	EEPROM.get(MAG_GAIN_X_, xGainError_);
+        EEPROM.get(MAG_GAIN_Y_, yGainError_);
+        EEPROM.get(MAG_GAIN_Z_, zGainError_);
+	
+        EEPROM.get(MAG_OFFSET_X_, xOffset_);
+        EEPROM.get(MAG_OFFSET_Y_, yOffset_);
+        EEPROM.get(MAG_OFFSET_Z_, zOffset_);
+	
+        //Check for Erroneous Values before they are written
+        if (xGainError_ < 0.4){
+          xGainError_ = 1;
+        }
+        if (yGainError_ < 0.4){
+          yGainError_ = 1;
+        }
+        if (zGainError_ < 0.4){
+          zGainError_ = 1;
+        }
 }
 
+void HMC5883L::calibrate(){
+        Serial.println("Begin Calibration");
+        
+        unsigned long startTime = millis();
+        
+        float xMin = 0;
+        float xMax = 0;
+        float yMin = 0;
+        float yMax = 0;
+        float zMin = 0;
+        float zMax = 0;
+        
+        while(millis() - startTime < calibRunTime){
+          poll();
+          
+          if (mX_ > xMax){
+            xMax = mX_;
+          } else if (mX_ < xMin){
+            xMin = mX_;
+          }
+          
+          if (mY_ > yMax){
+            yMax = mY_;
+          } else if (mY_ < yMin){
+            yMin = mY_;
+          }
+          
+          if (mZ_ > zMax){
+            zMax = mZ_;
+          } else if (mZ_ < zMin){
+            zMin = mZ_;
+          }
+        }
+        
+        Serial.println("End Calibration");
+        
+        Serial.print("xMax: ");
+        Serial.println(xMax);
+        Serial.print("xMin: ");
+        Serial.println(xMin);
+        Serial.print("zMax: ");
+        Serial.println(zMax);
+        Serial.print("zMin: ");
+        Serial.println(zMin);
+        xOffset_ = (xMax + xMin) / 2;
+        yOffset_ = (yMax + yMin) / 2;
+        zOffset_ = (zMax + zMin) / 2;
+        
+        EEPROM.put(MAG_OFFSET_X_, xOffset_);
+        EEPROM.put(MAG_OFFSET_Y_, yOffset_);
+        EEPROM.put(MAG_OFFSET_Z_, zOffset_);
+        
+        float F_AVG = ((xMax - xOffset_) + (yMax - yOffset_) + (zMax - zOffset_)) / 3;
+        
+        xGainError_ = F_AVG / (xMax - xOffset_);
+        yGainError_ = F_AVG / (yMax - yOffset_);
+        zGainError_ = F_AVG / (zMax - zOffset_);
+        
+        EEPROM.put(MAG_GAIN_X_, xGainError_);
+        EEPROM.put(MAG_GAIN_Y_, yGainError_);
+        EEPROM.put(MAG_GAIN_Z_, zGainError_);
+        
+        /*
+        Serial.print("xOffset: ");
+        Serial.println(xOffset_);
+        Serial.print("yOffset: ");
+        Serial.println(yOffset_);
+        Serial.print("zOffset: ");
+        Serial.println(zOffset_);
+        Serial.print("xGain: ");
+        Serial.println(xGainError_);
+        Serial.print("yGain: ");
+        Serial.println(yGainError_);
+        Serial.print("zGain: ");
+        Serial.println(zGainError_);
+        */
+        
+}
 
 void HMC5883L::update(){
 
 	poll();
 
-	xScaled = mX_ * gainFactor_ * xGainError_ + xOffset_;
-	yScaled = mY_ * gainFactor_ * yGainError_ + yOffset_;
-	zScaled = mZ_ * gainFactor_ * zGainError_ + zOffset_;
+	xScaled = (mX_ - xOffset_) * gainFactor_ * xGainError_;
+        yScaled = (mY_ - yOffset_) * gainFactor_ * yGainError_;
+        zScaled = (mZ_ - zOffset_) * gainFactor_ * zGainError_;
 
 }
 

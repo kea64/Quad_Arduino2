@@ -122,7 +122,7 @@
   #define zMagOffset 0
   #define ROLL_OFFSET 0 
   #define PITCH_OFFSET 0 
-  #define YAW_OFFSET 90
+  #define YAW_OFFSET 0
   #define ROLL_SENSITIVITY 0.5
   #define PITCH_SENSITIVITY 0.5
   #define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
@@ -205,7 +205,7 @@
   #define zMagOffset 0
   #define ROLL_OFFSET 0 
   #define PITCH_OFFSET 0 
-  #define YAW_OFFSET 90
+  #define YAW_OFFSET 0
   #define ROLL_SENSITIVITY 0.5
   #define PITCH_SENSITIVITY 0.5
   #define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw

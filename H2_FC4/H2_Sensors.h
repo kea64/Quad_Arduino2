@@ -93,7 +93,8 @@ private:
 class HMC5883L{
 	public:
 		//Quad_HMC5883L();
-		void init(double xGainError, double yGainError, double zGainError, double xOffset, double yOffset, double zOffset);
+		void init();
+                void calibrate();
 		void update();
 		void poll();
 
