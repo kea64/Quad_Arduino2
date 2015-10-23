@@ -327,6 +327,7 @@ void MPU6050::offsetCal(){
 }
 
 void MPU6050::accelCalib(){
+  #if defined(CRIUS)
   float rawExtrema[6] = {0,0,0,0,0,0};
   Serial.println("Start Calibration");
   
@@ -385,7 +386,7 @@ void MPU6050::accelCalib(){
   } else {
     Serial.println("E3");
   }
-  
+  #endif
 }
 
 void ADXL345::init(double accAlpha) {
@@ -779,6 +780,7 @@ void HMC5883L::init(){
 }
 
 void HMC5883L::calibrate(){
+    #if defined(CRIUS)
         Serial.println("Begin Calibration");
         
         unsigned long startTime = millis();
@@ -854,7 +856,7 @@ void HMC5883L::calibrate(){
         Serial.print("zGain: ");
         Serial.println(zGainError_);
         */
-        
+     #endif   
 }
 
 void HMC5883L::update(){

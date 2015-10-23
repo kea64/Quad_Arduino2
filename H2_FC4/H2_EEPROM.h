@@ -18,6 +18,7 @@ Number of Bytes Used - 3
 #define ACCEL_CHECK_ 48
 #define ACCEL_CALIB_SCHEDULE_ 49
 #define MAG_CALIB_SCHEDULE_ 50
+#define MAG_CHECK_ 51
 
 #define ACCEL_OFFSET_X_ 150
 #define ACCEL_OFFSET_Y_ 154

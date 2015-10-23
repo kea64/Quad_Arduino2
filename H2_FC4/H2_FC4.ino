@@ -110,17 +110,17 @@ void setup(){
   //Indicator LED's ... To Be Assigned
   pinMode(RED_LED, OUTPUT);
   //Crius Board Only Feature
-  if(CRIUS){
+  #if defined(CRIUS)
     pinMode(GREEN_LED, OUTPUT);
     pinMode(BLUE_LED, OUTPUT);
-  }
+  #endif
   
   digitalWrite(RED_LED, LOW);
   //Crius Board Only Feature
-  if(CRIUS){
+  #if defined(CRIUS)
     digitalWrite(GREEN_LED, LOW);
     digitalWrite(BLUE_LED, LOW);
-  }
+  #endif
 }
 
 //----------------------------MAIN/SETUP----------------------------------//
@@ -242,11 +242,16 @@ void loop(){
     //Sensor Updates
     #if defined(MPU6050_EN)
       checkCompli(mpu, mag, orient, compliClockOld);
-      checkAccCalib(mpu);
-      checkMagCalib(mag);
+      #if defined(CRIUS)
+        checkAccCalib(mpu);
+        checkMagCalib(mag);
+      #endif
     #elif (defined(ITG3200_EN) || defined(L3D4200D_EN)) && defined(ADXL345_EN)
       checkCompli(gyro, accel, mag, orient, compliClockOld);
-      checkAccCalib(accel);
+      #if defined(CRIUS)
+        checkAccCalib(accel);
+        checkMagCalib(mag);
+      #endif
     #endif
     
     checkBaro(baro, baroClockOld, orient);

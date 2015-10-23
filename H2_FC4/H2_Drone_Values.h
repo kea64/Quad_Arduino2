@@ -2,8 +2,8 @@
 #define H2_Drone_Values_h
 
 //Board Choice
-#define CRIUS 1
-#define NANO 0
+#define CRIUS
+//#define NANO
 
 //Drone Choice
 #define SPYDER_EN
@@ -25,7 +25,7 @@
 #define PWM_IN
 //#define PPM_IN
 
-#if (NANO)
+#if defined(NANO)
   #define channel1Pin A3
   #define channel2Pin A2
   #define channel3Pin A1
@@ -37,7 +37,7 @@
   #define channel5 6
   #define channel6 7
   #define GPS_SERIAL 0
-#elif (CRIUS)
+#elif defined(CRIUS)
   #define channel1Pin A3
   #define channel2Pin A2
   #define channel3Pin A1

@@ -95,10 +95,10 @@ void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro){
                           rollOverDelay++;
                         }
                         if(rollOverDelay >= ARM_DELAY){
-                          if(EEPROM.read(ACCEL_CHECK_) != 0){
+                          if(EEPROM.read(ACCEL_CHECK_) != 0 && EEPROM.read(MAG_CHECK_) != 0){
                             MOTOR_EN = 1;
                           } else {
-                            Serial.println("Accel not Calibrated");
+                            Serial.println("Sensors not Calibrated");
                           }
                           rollOverDelay = 0;
 			  digitalWrite(13, HIGH);
@@ -133,10 +133,10 @@ void checkArming(bool &MOTOR_EN, int &rollOverDelay, class BMP180 &baro){
                         }
                         
                         if(rollOverDelay >= ARM_DELAY){
-                          if (EEPROM.read(ACCEL_CHECK_) != 0){
+                          if (EEPROM.read(ACCEL_CHECK_) != 0 && EEPROM.read(MAG_CHECK_) != 0){
                             MOTOR_EN = 1;
                           } else {
-                            Serial.println("Accel not Calibrated");
+                            Serial.println("Sensors not Calibrated");
                           }
                           rollOverDelay = 0;
 			  digitalWrite(13, HIGH);
