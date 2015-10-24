@@ -38,6 +38,7 @@ volatile int channel5Cycle;
 volatile int channel6Cycle;
 
 int count = 0;
+int compli_count = 0;
 
 unsigned long channel1Start, channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
 
@@ -409,10 +410,12 @@ void transmitData(struct ORIENT_STRUCT &orient, class ADXL345 &acc, class L3D420
        
        Serial.print("CH6VAR ");
        Serial.println(channel6Var);
-       Serial.println(count);
+       Serial.print("F_Count: ");
+       Serial.println(compli_count);
        
      }
      count = 0;
+     compli_count = 0;
      commClockOld = millis();
    }
 }
@@ -489,10 +492,12 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        
        Serial.print("CH6VAR ");
        Serial.println(channel6Var);
-       Serial.println(count);
+       Serial.print("F_Count: ");
+       Serial.println(compli_count);
        
      }
      count = 0;
+     compli_count = 0;
      commClockOld = millis();
    }
 }

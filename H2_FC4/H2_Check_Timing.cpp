@@ -14,9 +14,12 @@
 #include "H2_Check_Timing.h"
 #include "H2_EEPROM.h"
 
+extern int compli_count;
+
 void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
 	//Main Sensor Reading and Motor Control
 	if ((millis() - compliClockOld) >= COMPLI_DELAY){
+                compli_count += 1; //Complimentary Clock Cycle Counter
 		compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
 		calcYaw(mag, orient); //Tilt Compensated Compass Code
 
@@ -27,6 +30,7 @@ void checkCompli(class L3D4200D &gyro, class ADXL345 &acc, class HMC5883L &mag, 
 void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
 	//Main Sensor Reading and Motor Control
 	if ((millis() - compliClockOld) >= COMPLI_DELAY){
+                compli_count += 1; //Complimentary Clock Cycle Counter
 		compli(gyro, acc, orient, compliClockOld); //Complimentary Filter
 		calcYaw(mag, orient); //Tilt Compensated Compass Code
 
@@ -37,6 +41,7 @@ void checkCompli(class ITG3200 &gyro, class ADXL345 &acc, class HMC5883L &mag, s
 void checkCompli(class MPU6050 &mpu, class HMC5883L &mag, struct ORIENT_STRUCT &orient, unsigned long &compliClockOld){
 	//Main Sensor Reading and Motor Control
 	if ((millis() - compliClockOld) >= COMPLI_DELAY){
+                compli_count += 1; //Complimentary Clock Cycle Counter
 		compli(mpu, orient, compliClockOld); //Complimentary Filter
 		calcYaw(mag, orient); //Tilt Compensated Compass Code
 
@@ -72,6 +77,7 @@ void checkAccCalib(class MPU6050 &mpu){
     
     EEPROM.put(ACCEL_CALIB_SCHEDULE_, 0);
   }
+  
 }
 
 void checkAccCalib(class ADXL345 &accel){
