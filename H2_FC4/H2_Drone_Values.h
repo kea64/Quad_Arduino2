@@ -91,8 +91,8 @@
 
 #define BARO_MODE 3
 
-#define COMPLI_DELAY 10
-#define BARO_DELAY 50
+#define COMPLI_DELAY 0
+#define BARO_DELAY 75
 #define TEMP_DELAY 2000
 #define COMM_DELAY 250
 #define CONTROL_DELAY 10

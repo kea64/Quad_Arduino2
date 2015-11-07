@@ -299,6 +299,10 @@ void loop(){
     #endif
     
   } 
+  
+//_______________________________________________________________________// 
+//-------------------------=---End Loop----------------------------------//
+//_______________________________________________________________________//
 }
 
 void updateGPS(struct ORIENT_STRUCT &orient, struct TARGET_STRUCT &target){
@@ -480,7 +484,7 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        
        */
        
-       
+       /*
        Serial.print("Ch1: ");
        Serial.println(channel1Cycle);
        Serial.print("Ch2: ");
@@ -489,9 +493,10 @@ void transmitData(struct ORIENT_STRUCT &orient, class MPU6050 mpu,  MS5611 baro,
        Serial.println(channel3Cycle);
        Serial.print("Ch4: ");
        Serial.println(channel4Cycle);
+       */
        
-       Serial.print("CH6VAR ");
-       Serial.println(channel6Var);
+       //Serial.print("CH6VAR ");
+       //Serial.println(channel6Var);
        Serial.print("F_Count: ");
        Serial.println(compli_count);
        

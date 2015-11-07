@@ -43,7 +43,7 @@ void checkCompli(class MPU6050 &mpu, class HMC5883L &mag, struct ORIENT_STRUCT &
 	if ((millis() - compliClockOld) >= COMPLI_DELAY){
                 compli_count += 1; //Complimentary Clock Cycle Counter
 		compli(mpu, orient, compliClockOld); //Complimentary Filter
-		calcYaw(mag, orient); //Tilt Compensated Compass Code
+		//calcYaw(mag, orient); //Tilt Compensated Compass Code
 
 		compliClockOld = millis();
 	}
