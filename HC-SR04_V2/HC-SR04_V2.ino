@@ -21,7 +21,7 @@ void loop() {
   Serial.print("Distance: ");
   Serial.println(ping1Dist);
   
-  delay(50);
+  delay(30);
   
 
 }
