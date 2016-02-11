@@ -54,6 +54,7 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
 		#endif
 
     #if !defined(ROVER_EN)
+    //Aerial Drone Control
   		switch (RC_CONTROL_MODE){
   		case 0:
   			if (AUXILIARY_EN){
@@ -130,6 +131,20 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
   			}
   			break;
   		}
+    #endif
+
+    #if defined(ROVER_EN)
+      switch(RC_CONTROL_MODE){
+        case 0:
+          //To be added
+          break;
+        case 1:
+          //To be added
+          break;
+        case 2:
+          //To be added
+          break;
+      }
     #endif
 
 		processMotors(output);
