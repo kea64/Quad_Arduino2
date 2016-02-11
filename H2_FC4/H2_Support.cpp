@@ -2,9 +2,9 @@
 #include "H2_Support.h"
 #include "H2_Drone_Values.h"
 
-extern unsigned long channel1Start, channel2Start, channel3Start, channel4Start, channel5Start, channel6Start;
+extern unsigned long channel1Start, channel2Start, channel3Start, channel4Start, channel5Start, channel6Start, channel7Start, channel8Start;
 
-extern volatile int channel1Cycle, channel2Cycle, channel3Cycle, channel4Cycle, channel5Cycle, channel6Cycle;
+extern volatile int channel1Cycle, channel2Cycle, channel3Cycle, channel4Cycle, channel5Cycle, channel6Cycle, channel7Cycle, channel8Cycle;
 
 void channel1Interrupt(){
 	if (digitalRead(channel1) == 1){
@@ -58,6 +58,24 @@ void channel6Interrupt(){
 	else {
 		channel6Cycle = micros() - channel6Start;
 	}
+}
+
+void channel7Interrupt(){
+  if (digitalRead(channel7) == 1){
+    channel7Start = micros();
+  }
+  else {
+    channel7Cycle = micros() - channel7Start;
+  }
+}
+
+void channel8Interrupt(){
+  if (digitalRead(channel8) == 1){
+    channel8Start = micros();
+  }
+  else {
+    channel8Cycle = micros() - channel8Start;
+  }
 }
 
 double intMap(int inValue, int inLow, int inHigh, int outLow, int outHigh){

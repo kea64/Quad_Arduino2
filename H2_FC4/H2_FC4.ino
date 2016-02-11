@@ -36,11 +36,14 @@ volatile int channel3Cycle;
 volatile int channel4Cycle;
 volatile int channel5Cycle;
 volatile int channel6Cycle;
+volatile int channel7Cycle;
+volatile int channel8Cycle;
 
 int count = 0;
 int compli_count = 0;
 
-unsigned long channel1Start, channel2Start,channel3Start,channel4Start,channel5Start,channel6Start;
+unsigned long channel1Start, channel2Start,channel3Start,channel4Start;
+unsigned long channel5Start,channel6Start,channel7Start,channel8Start;
 
 double channel6Var = 0;
 
@@ -58,18 +61,12 @@ double channel6Var = 0;
   Servo output7;
   Servo output8;
 #endif
+#if defined(ROVER_EN)
+  Servo output1;
+  Servo output2;
+#endif
 
 TinyGPSPlus gps;
-
-//HMC5883L mag;
-//ADXL345 accel;
-//L3D4200D gyro;
-//ITG3200 gyro;
-//BMP180 baro;
-//ORIENT_STRUCT orient;
-//TARGET_STRUCT target;
-//OUTPUT_STRUCT output;
-//PID_REGISTER channels2;
 
 
 //-------------------------------SETUP-----------------------------------//
@@ -88,6 +85,8 @@ void setup(){
     pinMode(channel4,INPUT);digitalWrite(channel4,HIGH);PCintPort::attachInterrupt(channel4,&channel4Interrupt,CHANGE);
     pinMode(channel5,INPUT);digitalWrite(channel5,HIGH);PCintPort::attachInterrupt(channel5,&channel5Interrupt,CHANGE);
     pinMode(channel6,INPUT);digitalWrite(channel6,HIGH);PCintPort::attachInterrupt(channel6,&channel6Interrupt,CHANGE);
+    pinMode(channel7,INPUT);digitalWrite(channel7,HIGH);PCintPort::attachInterrupt(channel7,&channel7Interrupt,CHANGE);
+    pinMode(channel8,INPUT);digitalWrite(channel8,HIGH);PCintPort::attachInterrupt(channel8,&channel8Interrupt,CHANGE);
   #endif
   #if defined(PPM_IN)
     pinMode(PPM_CHANNEL,INPUT);digitalWrite(PPM_CHANNEL,HIGH);PCintPort::attachInterrupt(PPM_CHANNEL,&channel1Interrupt,CHANGE);
@@ -107,17 +106,20 @@ void setup(){
     output7.attach(channel7Pin);
     output8.attach(channel8Pin);
   #endif
-  
+  #if defined(ROVER_EN)
+    output1.attach(channel1Pin);
+    output2.attach(channel2Pin);
+  #endif
   //Indicator LED's ... To Be Assigned
   pinMode(RED_LED, OUTPUT);
-  //Crius Board Only Feature
+  //Crius Board Only Features
   #if defined(CRIUS)
     pinMode(GREEN_LED, OUTPUT);
     pinMode(BLUE_LED, OUTPUT);
   #endif
   
   digitalWrite(RED_LED, LOW);
-  //Crius Board Only Feature
+  //Crius Board Only Features
   #if defined(CRIUS)
     digitalWrite(GREEN_LED, LOW);
     digitalWrite(BLUE_LED, LOW);
@@ -193,16 +195,18 @@ void loop(){
     baro.begin(altAlpha, altVelAlpha);
     baro.resetReference();
   #endif
+
+  #if !defined(ROVER_EN)
+    channels.rsPID.updateDefaults(KPRS, KIRS, KDRS, 0, ROLL_STAB_MAXIMUM, -ROLL_STAB_MAXIMUM, KMRS);
+    channels.psPID.updateDefaults(KPPS, KIPS, KDPS, 0, PITCH_STAB_MAXIMUM, -PITCH_STAB_MAXIMUM, KMPS);
+    channels.ysPID.updateDefaults(KPYS, KIYS, KDYS, 0, YAW_STAB_MAXIMUM, -YAW_STAB_MAXIMUM, KMYS);
   
-  channels.rsPID.updateDefaults(KPRS, KIRS, KDRS, 0, ROLL_STAB_MAXIMUM, -ROLL_STAB_MAXIMUM, KMRS);
-  channels.psPID.updateDefaults(KPPS, KIPS, KDPS, 0, PITCH_STAB_MAXIMUM, -PITCH_STAB_MAXIMUM, KMPS);
-  channels.ysPID.updateDefaults(KPYS, KIYS, KDYS, 0, YAW_STAB_MAXIMUM, -YAW_STAB_MAXIMUM, KMYS);
+    channels.rrPID.updateDefaults(KPRR, KIRR, KDRR, 0, ROLL_RATE_MAXIMUM, -ROLL_RATE_MAXIMUM, KMRR);
+    channels.prPID.updateDefaults(KPPR, KIPR, KDPR, 0, PITCH_RATE_MAXIMUM, -PITCH_RATE_MAXIMUM, KMPR);
+    channels.yrPID.updateDefaults(KPYR, KIYR, KDYR, 0, YAW_RATE_MAXIMUM, -YAW_RATE_MAXIMUM, KMYR);
   
-  channels.rrPID.updateDefaults(KPRR, KIRR, KDRR, 0, ROLL_RATE_MAXIMUM, -ROLL_RATE_MAXIMUM, KMRR);
-  channels.prPID.updateDefaults(KPPR, KIPR, KDPR, 0, PITCH_RATE_MAXIMUM, -PITCH_RATE_MAXIMUM, KMPR);
-  channels.yrPID.updateDefaults(KPYR, KIYR, KDYR, 0, YAW_RATE_MAXIMUM, -YAW_RATE_MAXIMUM, KMYR);
-  
-  channels.atPID.updateDefaults(KPT, KIT, KDT, 0, THROTTLE_MAXIMUM, THROTTLE_MINIMUM, KMT);
+    channels.atPID.updateDefaults(KPT, KIT, KDT, 0, THROTTLE_MAXIMUM, THROTTLE_MINIMUM, KMT);
+  #endif
   
   #if defined(GPS_EN)
     channels.arPID.updateDefaults(GPR, GIR, GDR, 0, GPS_ROLL_MAXIMUM, -GPS_ROLL_MAXIMUM, GMR);
@@ -288,6 +292,10 @@ void loop(){
       #if defined(OCTOCOPTER_EN)
         output7.writeMicroseconds(THROTTLE_MINIMUM);
         output8.writeMicroseconds(THROTTLE_MINIMUM);
+      #endif
+      #if defined(ROVER_EN)
+        output1.writeMicroseconds(THROTTLE_NEUTRAL);
+        output2.writeMicroseconds(THROTTLE_NEUTRAL);
       #endif
     }
     

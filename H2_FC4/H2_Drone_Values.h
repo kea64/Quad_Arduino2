@@ -6,10 +6,11 @@
 //#define NANO
 
 //Drone Choice
-#define SPYDER_EN
+//#define SPYDER_EN
 //#define HEXACOPTER_EN
 //#define OCTOCOPTER_EN
 //#define TRI_EN
+#define ROVER_EN
 
 //Sensor Choice
 #define MPU6050_EN
@@ -48,6 +49,8 @@
   #define channel4 11
   #define channel5 12
   #define channel6 13
+  #define channel7 0
+  #define channel8 0
   #define PPM_CHANNEL 48
   #define GPS_SERIAL 1
 #endif
@@ -274,6 +277,54 @@
   #define GIP 0
   #define GDP 0
   #define GMP 25
+#endif
+
+//Rover Specific Settings
+#if defined(ROVER_EN)
+  #define xMagError 0.96
+  #define yMagError 1.01
+  #define zMagError 0.95
+  #define xMagOffset -23
+  #define yMagOffset -102
+  #define zMagOffset 0
+  #define ROLL_OFFSET 0 
+  #define PITCH_OFFSET 0 
+  #define YAW_OFFSET 0
+  #define ROLL_SENSITIVITY 0.5
+  #define PITCH_SENSITIVITY 0.5
+  #define YAW_SENSITIVITY 0.25 //Controls the degree at which CH4 affects yaw
+  #define ROLL_RATE_MAXIMUM 350
+  #define PITCH_RATE_MAXIMUM 350
+  #define YAW_RATE_MAXIMUM 400
+  #define ROLL_STAB_MAXIMUM 400
+  #define PITCH_STAB_MAXIMUM 400
+  #define YAW_STAB_MAXIMUM 300
+  #define THROTTLE_MAXIMUM 1864
+  #define THROTTLE_MINIMUM 1100
+  #define THROTTLE_NEUTRAL 1500
+  #define AUTO_THROTTLE_MAXIMUM 1700
+  #define AUTO_THROTTLE_MINIMUM 1300
+  #define THROTTLE_CUTOFF 1180
+  #define GPS_ROLL_MAXIMUM 20
+  #define GPS_PITCH_MAXIMUM 20
+  #define ACC_SCALAR 0.93
+  #define ARM_ENGAGE_THRESHOLD 1250
+  #define ARM_DISENGAGE_THRESHOLD 1775
+  #define ARM_THROTTLE_THRESHOLD 1180
+  #define SERVO_MAXIMUM 2000
+  #define SERVO_MIDPOINT 1500
+  #define SERVO_MINIMUM 1000
+  
+  #define GPR 0
+  #define GIR 0
+  #define GDR 0
+  #define GMR 25
+  
+  #define GPP 0
+  #define GIP 0
+  #define GDP 0
+  #define GMP 25
+
 #endif
 
 

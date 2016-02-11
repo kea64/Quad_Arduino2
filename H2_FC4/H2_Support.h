@@ -12,6 +12,8 @@ void channel3Interrupt();
 void channel4Interrupt();
 void channel5Interrupt();
 void channel6Interrupt();
+void channel7Interrupt();
+void channel8Interrupt();
 
 //Basic Formatting Functions
 double intMap(int inValue, int inLow, int inHigh, int outLow, int outHigh);

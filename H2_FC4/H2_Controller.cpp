@@ -22,20 +22,22 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
 		count += 1;
 
 		channel6Var = intMap(channel6Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 0, 2);
-		
-		channels.rrPID.updateGain(KPRR, channel6Var, KDRR);
-		channels.prPID.updateGain(KPPR, channel6Var, KDPR);
-		//channels.yrPID.updateGain(KPYR, channel6Var, KDYR);
-		//channels.rrPID.updateGain(KPRR, channel6Var, KDRR);
-		//channels.yrPID.updateGain(KPYR, channel6Var, KDYR);
 
-		//channels.rsPID.updateGain(channel6Var, KIRS, KDRS);
-		//hannels.psPID.updateGain(channel6Var, KIPS, KDPS);
+    #if !defined(ROVER_EN)
+		  channels.rrPID.updateGain(KPRR, channel6Var, KDRR);
+		  channels.prPID.updateGain(KPPR, channel6Var, KDPR);
+		  //channels.yrPID.updateGain(KPYR, channel6Var, KDYR);
+		  //channels.rrPID.updateGain(KPRR, channel6Var, KDRR);
+		  //channels.yrPID.updateGain(KPYR, channel6Var, KDYR);
 
-		double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
-		double pitchChannel = intMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 90, -90);
-		double yawChannel = intMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -180, 180);
+		  //channels.rsPID.updateGain(channel6Var, KIRS, KDRS);
+		  //channels.psPID.updateGain(channel6Var, KIPS, KDPS);
 
+		  double rollChannel = intMap(channel1Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -90, 90);
+		  double pitchChannel = intMap(channel2Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, 90, -90);
+		  double yawChannel = intMap(channel4Cycle, SERVO_MINIMUM, SERVO_MAXIMUM, -180, 180);
+    #endif
+     
 		double errorLongitude;
 		double errorLatitude;
 		double errorRoll;
@@ -51,82 +53,84 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
 			channels.apPID.calc(errorPitch, 0, cycle);
 		#endif
 
-		switch (RC_CONTROL_MODE){
-		case 0:
-			if (AUXILIARY_EN){
-				output.roll = channel1Cycle;
-				output.pitch = channel2Cycle;
-				output.throttle = channel3Cycle;
-				output.yaw = channel4Cycle;
-			}
-			else {
-				//channels.rollPID.calc(error, sensor, cycle);
-				if (ACRO_EN && channel3Cycle >= THROTTLE_CUTOFF){
-					channels.rrPID.calc(rollChannel - orient.rollGyro, orient.rollGyro, cycle);
-					channels.prPID.calc(pitchChannel - orient.pitchGyro, orient.pitchGyro, cycle);
-				}
-				else if (channel3Cycle >= THROTTLE_CUTOFF) {
-					channels.rsPID.calc(rollChannel - orient.roll, orient.roll, cycle);
-					channels.psPID.calc(pitchChannel - orient.pitch, orient.pitch, cycle);
-
-					//count = channels.psPID.getControl();
-
-					channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
-					channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
-				}
-
-
-				channels.yrPID.calc(yawChannel - orient.yawGyro, orient.yawGyro, cycle);
-
-				output.roll = channels.rrPID.getControl();
-				output.pitch = channels.prPID.getControl();
-				output.throttle = channel3Cycle;
-				output.yaw = channels.yrPID.getControl();
-			}
-			break;
-		case 1:
-			channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
-			channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
-			channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
-
-			channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
-			channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
-			channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
-
-			channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
-
-			if (AUXILIARY_EN){
-				//ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
-			}
-			else {
-				output.roll = channels.rrPID.getControl();
-				output.pitch = channels.prPID.getControl();
-				output.throttle = channels.atPID.getControl();
-				output.yaw = channels.yrPID.getControl();
-			}
-			break;
-		case 2:
-			channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
-			channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
-			channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
-
-			channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
-			channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
-			channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
-
-			channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
-
-			if (AUXILIARY_EN){
-				//ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
-			}
-			else {
-				output.roll = channels.rrPID.getControl();
-				output.pitch = channels.prPID.getControl();
-				output.throttle = channels.atPID.getControl();
-				output.yaw = channels.yrPID.getControl();
-			}
-			break;
-		}
+    #if !defined(ROVER_EN)
+  		switch (RC_CONTROL_MODE){
+  		case 0:
+  			if (AUXILIARY_EN){
+  				output.roll = channel1Cycle;
+  				output.pitch = channel2Cycle;
+  				output.throttle = channel3Cycle;
+  				output.yaw = channel4Cycle;
+  			}
+  			else {
+  				//channels.rollPID.calc(error, sensor, cycle);
+  				if (ACRO_EN && channel3Cycle >= THROTTLE_CUTOFF){
+  					channels.rrPID.calc(rollChannel - orient.rollGyro, orient.rollGyro, cycle);
+  					channels.prPID.calc(pitchChannel - orient.pitchGyro, orient.pitchGyro, cycle);
+  				}
+  				else if (channel3Cycle >= THROTTLE_CUTOFF) {
+  					channels.rsPID.calc(rollChannel - orient.roll, orient.roll, cycle);
+  					channels.psPID.calc(pitchChannel - orient.pitch, orient.pitch, cycle);
+  
+  					//count = channels.psPID.getControl();
+  
+  					channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+  					channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+  				}
+  
+  
+  				channels.yrPID.calc(yawChannel - orient.yawGyro, orient.yawGyro, cycle);
+  
+  				output.roll = channels.rrPID.getControl();
+  				output.pitch = channels.prPID.getControl();
+  				output.throttle = channel3Cycle;
+  				output.yaw = channels.yrPID.getControl();
+  			}
+  			break;
+  		case 1:
+  			channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
+  			channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
+  			channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
+  
+  			channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+  			channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+  			channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
+  
+  			channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
+  
+  			if (AUXILIARY_EN){
+  				//ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
+  			}
+  			else {
+  				output.roll = channels.rrPID.getControl();
+  				output.pitch = channels.prPID.getControl();
+  				output.throttle = channels.atPID.getControl();
+  				output.yaw = channels.yrPID.getControl();
+  			}
+  			break;
+  		case 2:
+  			channels.rsPID.calc(channels.arPID.getControl() - orient.roll, orient.roll, cycle);
+  			channels.psPID.calc(channels.apPID.getControl() - orient.pitch, orient.pitch, cycle);
+  			channels.ysPID.calc(target.yaw - orient.yaw, orient.yaw, cycle);
+  
+  			channels.rrPID.calc(channels.rsPID.getControl() - orient.rollGyro, orient.rollGyro, cycle);
+  			channels.prPID.calc(channels.psPID.getControl() - orient.pitchGyro, orient.pitchGyro, cycle);
+  			channels.yrPID.calc(channels.ysPID.getControl() - orient.yawGyro, orient.yawGyro, cycle);
+  
+  			channels.atPID.calc(target.alt - orient.alt, orient.alt, cycle);
+  
+  			if (AUXILIARY_EN){
+  				//ADD QUAD GPS CODE HERE- NEED TO PASS GPSROLL TO MAP TO OUTPUT
+  			}
+  			else {
+  				output.roll = channels.rrPID.getControl();
+  				output.pitch = channels.prPID.getControl();
+  				output.throttle = channels.atPID.getControl();
+  				output.yaw = channels.yrPID.getControl();
+  			}
+  			break;
+  		}
+    #endif
 
 		processMotors(output);
 
