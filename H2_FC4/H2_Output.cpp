@@ -21,6 +21,10 @@
   extern Servo output7;
   extern Servo output8;
 #endif
+#if defined(ROVER_EN)
+  extern Servo output2;
+  extern Servo output4;
+#endif
 
 extern volatile int channel1Cycle, channel2Cycle, channel3Cycle, channel4Cycle;
 
@@ -82,7 +86,18 @@ void processMotors(struct OUTPUT_STRUCT output){
 			}
 			
 		}
-        #endif
+
+   #elif defined(ROVER_EN)
+      int op2 = output.throttle;
+      int op4 = output.yaw;
+
+      withinBounds(op2, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
+      withinBounds(op4, THROTTLE_MAXIMUM, THROTTLE_MINIMUM);
+
+      output2.writeMicroseconds(op2);
+      output4.writeMicroseconds(op4);
+   
+   #endif
 }
 
 void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro){

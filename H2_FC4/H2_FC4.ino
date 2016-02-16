@@ -62,8 +62,8 @@ double channel6Var = 0;
   Servo output8;
 #endif
 #if defined(ROVER_EN)
-  Servo output1;
   Servo output2;
+  Servo output4;
 #endif
 
 TinyGPSPlus gps;
@@ -107,8 +107,8 @@ void setup(){
     output8.attach(channel8Pin);
   #endif
   #if defined(ROVER_EN)
-    output1.attach(channel1Pin);
     output2.attach(channel2Pin);
+    output4.attach(channel4Pin);
   #endif
   //Indicator LED's ... To Be Assigned
   pinMode(RED_LED, OUTPUT);
@@ -298,8 +298,8 @@ void loop(){
         output8.writeMicroseconds(THROTTLE_MINIMUM);
       #endif
       #if defined(ROVER_EN)
-        output1.writeMicroseconds(THROTTLE_NEUTRAL);
         output2.writeMicroseconds(THROTTLE_NEUTRAL);
+        output4.writeMicroseconds(THROTTLE_NEUTRAL);
       #endif
     }
     

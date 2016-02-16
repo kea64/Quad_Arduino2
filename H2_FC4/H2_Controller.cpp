@@ -136,13 +136,15 @@ void updateController(struct PID_REGISTER &channels, struct TARGET_STRUCT target
     #if defined(ROVER_EN)
       switch(RC_CONTROL_MODE){
         case 0:
-          //To be added
+          //Manual Driving with Limits
+          output.throttle = channel2Cycle;
+          output.yaw = channel4Cycle;
           break;
         case 1:
-          //To be added
+          //Assisted Driving
           break;
         case 2:
-          //To be added
+          //GPS Driving or RTH
           break;
       }
     #endif
