@@ -273,8 +273,12 @@ void loop(){
     #endif
     
     updateMode(channels, target, orient, RC_CONTROL_MODE, modeClockOld);
-    
-    checkArming(MOTOR_EN, rollOverDelay, baro);
+
+    #if defined(ROVER_EN)
+      checkArmingRover(MOTOR_EN, rollOverDelay, baro);
+    #else
+      checkArming(MOTOR_EN, rollOverDelay, baro);
+    #endif
     
     if (MOTOR_EN || AUXILIARY_EN){
       updateController(channels, target, orient, output, RC_CONTROL_MODE, controlClockOld);

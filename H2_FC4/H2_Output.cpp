@@ -22,7 +22,7 @@
   extern Servo output8;
 #endif
 
-extern volatile int channel3Cycle, channel4Cycle;
+extern volatile int channel1Cycle, channel2Cycle, channel3Cycle, channel4Cycle;
 
 
 void processMotors(struct OUTPUT_STRUCT output){
@@ -160,5 +160,43 @@ void checkArming(bool &MOTOR_EN, int &rollOverDelay, class BMP180 &baro){
                 }
 	}
 	//Perhaps Add PID DISABLE Code Here
+}
+
+void checkArmingRover(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro){
+  if (millis() > INITIAL_ARM_DELAY){
+    if (channel4Cycle >= ARM_ENGAGE_THRESHOLD && channel2Cycle - THROTTLE_NEUTRAL < 50 && channel4Cycle > 100 && channel2Cycle > 100){
+      if(MOTOR_EN != 1){
+                          #if defined(M5611_EN)
+                              baro.resetReference();
+                          #endif
+                          rollOverDelay++;
+                        }
+                        if(rollOverDelay >= ARM_DELAY){
+                          if(EEPROM.read(ACCEL_CHECK_) != 0 && EEPROM.read(MAG_CHECK_) != 0){
+                            MOTOR_EN = 1;
+                          } else {
+                            Serial.println("Sensors not Calibrated");
+                          }
+                          rollOverDelay = 0;
+        digitalWrite(13, HIGH);
+                        }
+
+    }
+    else if (channel4Cycle <= ARM_DISENGAGE_THRESHOLD && channel2Cycle - THROTTLE_NEUTRAL < 50){
+      if(MOTOR_EN != 0){
+                          rollOverDelay--;
+                        }
+                        if(rollOverDelay <= -ARM_DELAY){
+                          MOTOR_EN = 0;
+                          rollOverDelay = 0;
+        digitalWrite(13, LOW);
+                        }
+    }
+                else{
+                  //Stick not in arm/disarm positions
+                  rollOverDelay = 0; //Reset roll over
+                }
+  }
+  //Perhaps Add PID DISABLE Code Here
 }
 

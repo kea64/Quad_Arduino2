@@ -19,5 +19,6 @@ void processMotors(struct OUTPUT_STRUCT output);
 
 void checkArming(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro);
 void checkArming(bool &MOTOR_EN, int &rollOverDelay, class BMP180 &baro);
+void checkArmingRover(bool &MOTOR_EN, int &rollOverDelay, class MS5611 &baro);
 
 #endif
