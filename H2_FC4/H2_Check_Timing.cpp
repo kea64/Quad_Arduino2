@@ -91,7 +91,6 @@ void checkAccCalib(class ADXL345 &accel){
 void checkMagCalib(class HMC5883L &mag){
   if (EEPROM.read(MAG_CALIB_SCHEDULE_) == 1){
     mag.calibrate();
-    
     EEPROM.put(MAG_CALIB_SCHEDULE_, 0);
   }
 }

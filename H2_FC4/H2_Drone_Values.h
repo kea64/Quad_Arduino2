@@ -43,14 +43,14 @@
   #define channel2Pin A2
   #define channel3Pin A1
   #define channel4Pin A0
-  #define channel1 15
-  #define channel2 10
-  #define channel3 14
-  #define channel4 11
-  #define channel5 12
-  #define channel6 13
-  #define channel7 0
-  #define channel8 0
+  #define channel1 A8
+  #define channel2 A9
+  #define channel3 A10
+  #define channel4 A11
+  #define channel5 A12
+  #define channel6 A13
+  #define channel7 A14
+  #define channel8 A15
   #define PPM_CHANNEL 48
   #define GPS_SERIAL 1
 #endif

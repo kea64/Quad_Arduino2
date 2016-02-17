@@ -4,6 +4,8 @@
 #include "H2_Sensors.h"
 #include "H2_EEPROM.h"
 
+//#include "H2_Drone_Values.h"
+
 //MPU6050
 #define MPU6050_address 0x68
 #define MPU6050_I2C_BYPASS 0x37
@@ -327,7 +329,7 @@ void MPU6050::offsetCal(){
 }
 
 void MPU6050::accelCalib(){
-  #if defined(CRIUS)
+  
   float rawExtrema[6] = {0,0,0,0,0,0};
   Serial.println("Start Calibration");
   
@@ -386,7 +388,7 @@ void MPU6050::accelCalib(){
   } else {
     Serial.println("E3");
   }
-  #endif
+  
 }
 
 void ADXL345::init(double accAlpha) {
@@ -780,7 +782,7 @@ void HMC5883L::init(){
 }
 
 void HMC5883L::calibrate(){
-    #if defined(CRIUS)
+    
         Serial.println("Begin Calibration");
         
         unsigned long startTime = millis();
@@ -856,7 +858,7 @@ void HMC5883L::calibrate(){
         Serial.print("zGain: ");
         Serial.println(zGainError_);
         */
-     #endif   
+        
 }
 
 void HMC5883L::update(){

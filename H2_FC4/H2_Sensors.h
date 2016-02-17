@@ -94,7 +94,7 @@ class HMC5883L{
 	public:
 		//Quad_HMC5883L();
 		void init();
-                void calibrate();
+    void calibrate();
 		void update();
 		void poll();
 
